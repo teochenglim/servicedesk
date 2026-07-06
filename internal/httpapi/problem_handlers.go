@@ -38,6 +38,7 @@ func (s *Server) handleProblemCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not create problem", http.StatusInternalServerError)
 		return
 	}
+	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- p.ID is our own DB-generated int64, not user input
 	http.Redirect(w, r, "/problems/"+strconv.FormatInt(p.ID, 10), http.StatusSeeOther)
 }
 
@@ -88,5 +89,6 @@ func (s *Server) handleProblemLink(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not link ticket", http.StatusInternalServerError)
 		return
 	}
+	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- id is our own DB-generated int64, not user input
 	http.Redirect(w, r, "/problems/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }

@@ -128,6 +128,7 @@ func (s *Server) handleTicketCreate(w http.ResponseWriter, r *http.Request) {
 		s.render.Render(w, "ticket_new", ticketNewData{baseData: s.base(r, "New ticket"), Queues: queues, Error: err.Error()})
 		return
 	}
+	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- t.ID is our own DB-generated int64, not user input
 	http.Redirect(w, r, "/tickets/"+strconv.FormatInt(t.ID, 10), http.StatusSeeOther)
 }
 
@@ -366,5 +367,6 @@ func (s *Server) handleLabelRemove(w http.ResponseWriter, r *http.Request) {
 }
 
 func redirectToTicket(w http.ResponseWriter, r *http.Request, id int64) {
+	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- id is our own DB-generated int64, not user input
 	http.Redirect(w, r, "/tickets/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }

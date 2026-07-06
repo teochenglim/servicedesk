@@ -17,6 +17,12 @@ spec:
           image: servicedesk:latest # replace with your registry/tag, e.g. ghcr.io/you/servicedesk:v1.0.0
           ports:
             - containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           envFrom:
             - configMapRef:
                 name: servicedesk-config

@@ -21,6 +21,11 @@ spec:
           image: postgres:18
           ports:
             - containerPort: 5432
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
           envFrom:
             - secretRef:
                 name: postgres-secret

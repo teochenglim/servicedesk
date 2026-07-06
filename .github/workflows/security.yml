@@ -25,7 +25,7 @@ jobs:
     container:
       image: semgrep/semgrep
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Scan
         run: |
@@ -42,7 +42,7 @@ jobs:
 
       - name: Upload SARIF to GitHub Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@fb84f6228fd846d3c392887f22b18ce2d9139495 # v4
         with:
           sarif_file: semgrep.sarif
           category: semgrep
@@ -56,10 +56,10 @@ jobs:
     name: Trivy scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Scan filesystem (fail on CRITICAL/HIGH CVEs)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -70,7 +70,7 @@ jobs:
 
       - name: Scan filesystem (SARIF — uploaded to Security tab)
         if: always()
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload SARIF to GitHub Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@fb84f6228fd846d3c392887f22b18ce2d9139495 # v4
         with:
           sarif_file: trivy.sarif
           category: trivy
@@ -98,13 +98,13 @@ jobs:
     name: Trivy image scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Build image
         run: docker build -t servicedesk:scan .
 
       - name: Scan image (fail on CRITICAL/HIGH CVEs)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           scan-type: image
           image-ref: servicedesk:scan
