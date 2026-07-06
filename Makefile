@@ -103,9 +103,12 @@ k8s-logs: ## Tail logs from the servicedesk deployment in k8s
 
 .PHONY: github-action-bump
 github-action-bump: ## Pin .github/workflows/*.yml actions to latest release, full commit SHA (uses pinact)
+	@# Unauthenticated GitHub API calls are capped at 60/hour and this touches
+	@# ~10 actions x (list tags + verify); export GITHUB_TOKEN to raise that limit.
 	go run github.com/suzuki-shunsuke/pinact/cmd/pinact@latest run --update
 	go run github.com/suzuki-shunsuke/pinact/cmd/pinact@latest run --verify
-	@echo "Actions bumped and verified. Review the diff, then run 'make vet test' and re-check semgrep before committing."
+	@echo "Actions bumped and verified. Review the diff (check .pinact.yaml's ignore_actions"
+	@echo "weren't silently downgraded), then run 'make vet test' and re-check semgrep before committing."
 
 ## --- release --------------------------------------------------------------
 
