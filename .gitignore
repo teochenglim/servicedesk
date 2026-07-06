@@ -1,8 +1,9 @@
-# Build artifacts
-bin/
-dist/
-servicedesk
-servicedesk.exe
+# Build artifacts (anchored to repo root - a bare "servicedesk" pattern would
+# also match the cmd/servicedesk/ *source* directory and exclude it from git!)
+/bin/
+/dist/
+/servicedesk
+/servicedesk.exe
 *.test
 *.out
 
