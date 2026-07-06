@@ -32,20 +32,38 @@ func (s *Server) base(r *http.Request, title string) baseData {
 	return baseData{Title: title, User: &userView{UserID: c.UserID, Username: c.Username, Role: c.Role}}
 }
 
-type ticketsListData struct {
+type ticketsWorkspaceData struct {
 	baseData
+	// list pane — always populated
 	Tickets []models.Ticket
 	Queues  []models.Queue
 	Filter  repo.ListFilter
 	View    string
+
+	// detail pane — nil/zero when no ticket is selected (GET /tickets)
+	Ticket       *models.Ticket
+	Notes        []models.Note
+	Events       []models.EventLog
+	Tags         []models.Tag
+	Agents       []models.User
+	Watching     bool
+	Workflows    []models.Workflow
+	WaitingTasks []models.WorkflowTask
+	WaitingForms map[int64]waitingForm
+	Approvals    []models.Approval
+	UserNames    map[int64]string
+	UserRoles    map[int64]models.Role
 }
 
-func (s *Server) handleTicketsList(w http.ResponseWriter, r *http.Request) {
+// loadTicketsList builds the ticket list query from request filters/view and
+// runs it. Shared by GET /tickets (list only) and GET /tickets/{id} (list +
+// detail), so both keep the exact same filtering/scoping behavior.
+func (s *Server) loadTicketsList(r *http.Request) (tickets []models.Ticket, queues []models.Queue, f repo.ListFilter, view string, err error) {
 	claims := middleware.ClaimsFrom(r.Context())
 	q := r.URL.Query()
-	view := q.Get("view")
+	view = q.Get("view")
 
-	f := repo.ListFilter{Limit: 100}
+	f = repo.ListFilter{Limit: 100}
 	if st := q.Get("status"); st != "" {
 		f.Status = []string{st}
 	}
@@ -53,7 +71,7 @@ func (s *Server) handleTicketsList(w http.ResponseWriter, r *http.Request) {
 		f.Priority = []string{p}
 	}
 	if qid := q.Get("queue_id"); qid != "" {
-		if n, err := strconv.ParseInt(qid, 10, 64); err == nil {
+		if n, perr := strconv.ParseInt(qid, 10, 64); perr == nil {
 			f.QueueID = &n
 		}
 	}
@@ -74,9 +92,9 @@ func (s *Server) handleTicketsList(w http.ResponseWriter, r *http.Request) {
 	case "my-queues":
 		// Engineers browse the shared pool(s) they belong to (e.g. "tier1_queue"),
 		// so they can pick up tickets nobody has claimed yet.
-		ids, err := s.queueMembers.ListQueueIDsForUser(claims.UserID)
-		if err != nil {
-			s.log.Error("tickets: list queue memberships failed", "user_id", claims.UserID, "err", err)
+		ids, idsErr := s.queueMembers.ListQueueIDsForUser(claims.UserID)
+		if idsErr != nil {
+			s.log.Error("tickets: list queue memberships failed", "user_id", claims.UserID, "err", idsErr)
 		}
 		f.QueueIDs = ids
 	}
@@ -86,14 +104,21 @@ func (s *Server) handleTicketsList(w http.ResponseWriter, r *http.Request) {
 		f.CustomerScope = &repo.CustomerScope{OrgID: claims.OrgID, UserID: claims.UserID}
 	}
 
-	tickets, err := s.ticketSvc.List(f)
+	tickets, err = s.ticketSvc.List(f)
+	if err != nil {
+		return nil, nil, f, view, err
+	}
+	queues, _ = s.queues.List()
+	return tickets, queues, f, view, nil
+}
+
+func (s *Server) handleTicketsList(w http.ResponseWriter, r *http.Request) {
+	tickets, queues, f, view, err := s.loadTicketsList(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	queues, _ := s.queues.List()
-
-	s.render.Render(w, "tickets_list", ticketsListData{
+	s.render.Render(w, "tickets_workspace", ticketsWorkspaceData{
 		baseData: s.base(r, "Tickets"), Tickets: tickets, Queues: queues, Filter: f, View: view,
 	})
 }
@@ -132,21 +157,6 @@ func (s *Server) handleTicketCreate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/tickets/"+strconv.FormatInt(t.ID, 10), http.StatusSeeOther)
 }
 
-type ticketDetailData struct {
-	baseData
-	Ticket       models.Ticket
-	Notes        []models.Note
-	Events       []models.EventLog
-	Tags         []models.Tag
-	Agents       []models.User
-	Watching     bool
-	Workflows    []models.Workflow
-	WaitingTasks []models.WorkflowTask
-	WaitingForms map[int64]waitingForm
-	Approvals    []models.Approval
-	UserNames    map[int64]string
-}
-
 type waitingForm struct {
 	WorkflowName string
 	Fields       []workflow.FieldDef
@@ -172,6 +182,11 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+	}
+
+	tickets, queues, f, view, err := s.loadTicketsList(r)
+	if err != nil {
+		s.log.Warn("ticket detail: could not load ticket list pane", "err", err)
 	}
 
 	includeInternal := claims.Role != models.RoleCustomer
@@ -204,8 +219,10 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("ticket detail: could not load users", "ticket_id", id, "err", err)
 	}
 	userNames := make(map[int64]string, len(allUsers))
+	userRoles := make(map[int64]models.Role, len(allUsers))
 	for _, u := range allUsers {
 		userNames[u.ID] = u.Username
+		userRoles[u.ID] = u.Role
 	}
 
 	var agents []models.User
@@ -224,11 +241,12 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.render.Render(w, "ticket_detail", ticketDetailData{
+	s.render.Render(w, "tickets_workspace", ticketsWorkspaceData{
 		baseData: s.base(r, "Ticket #"+strconv.FormatInt(t.ID, 10)),
-		Ticket:   *t, Notes: notes, Events: events, Tags: tags, Agents: agents,
+		Tickets:  tickets, Queues: queues, Filter: f, View: view,
+		Ticket: t, Notes: notes, Events: events, Tags: tags, Agents: agents,
 		Watching: watching, Workflows: workflows, WaitingTasks: waiting, WaitingForms: waitingForms,
-		Approvals: approvals, UserNames: userNames,
+		Approvals: approvals, UserNames: userNames, UserRoles: userRoles,
 	})
 }
 

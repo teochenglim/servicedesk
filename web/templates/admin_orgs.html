@@ -29,7 +29,7 @@ see tickets scoped to their organization. Engineers/QueueAdmins/SystemAdmins are
   <h3>New organization</h3>
   <form class="stacked" method="post" action="/admin/orgs">
     <label>Name</label><input type="text" name="name" required placeholder="e.g. Acme Corp, or Acme Corp / Finance Dept">
-    <label>Parent org ID (optional — lets a Department point at its Company, a Company at its Group)</label>
+    <label>Parent org ID (optional, lets a Department point at its Company, a Company at its Group)</label>
     <input type="number" name="parent_id">
     <div class="actions"><button class="primary" type="submit">Create organization</button></div>
   </form>

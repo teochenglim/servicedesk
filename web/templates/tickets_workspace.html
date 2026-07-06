@@ -1,0 +1,237 @@
+{{define "tickets_workspace"}}
+{{template "header" .}}
+<div class="workspace">
+  {{template "ticket_list_pane" .}}
+  {{template "ticket_detail_pane" .}}
+</div>
+{{template "footer" .}}
+{{end}}
+
+{{define "ticket_list_pane"}}
+<div class="ticket-list-pane">
+  <div class="actions" style="justify-content:space-between; padding:0.75rem 1rem 0;">
+    <h3 style="margin:0;">Tickets</h3>
+  </div>
+  <div class="filters" style="padding:0 1rem;">
+    <a class="btn {{if not .View}}secondary{{end}}" href="/tickets">All</a>
+    <a class="btn secondary" href="/tickets?view=mine-created">Mine</a>
+    <a class="btn secondary" href="/tickets?view=mine-assigned">Assigned</a>
+    {{if .User.Role.IsAgent}}<a class="btn secondary" href="/tickets?view=my-queues">Pickup</a>{{end}}
+    <a class="btn secondary" href="/tickets?view=watched">Watched</a>
+  </div>
+  <form class="filters" method="get" action="/tickets" style="padding:0 1rem;">
+    <input type="hidden" name="view" value="{{.View}}">
+    <select name="status">
+      <option value="">Any status</option>
+      <option>New</option>
+      <option>In Progress</option>
+      <option>Resolved</option>
+      <option>Closed</option>
+      <option>Rejected</option>
+    </select>
+    <select name="priority">
+      <option value="">Any priority</option>
+      <option>P1</option><option>P2</option><option>P3</option><option>P4</option>
+    </select>
+    <input type="text" name="q" placeholder="Search...">
+    <button class="secondary" type="submit">Filter</button>
+  </form>
+
+  {{range .Tickets}}
+  <a class="ticket-row prio-{{.Priority}}{{if and $.Ticket (eq $.Ticket.ID .ID)}} selected{{end}}"
+     href="/tickets/{{.ID}}"
+     hx-get="/tickets/{{.ID}}" hx-select="#ticket-detail-pane" hx-target="#ticket-detail-pane"
+     hx-swap="outerHTML" hx-push-url="true">
+    <div class="subject">#{{.ID}} {{.Title}}</div>
+    <div class="row-meta">{{.Status}} · Queue {{.QueueID}}</div>
+    {{if .SLADueAt}}<span class="sla-chip {{slaState .SLADueAt}}">{{slaLabel .SLADueAt}}</span>{{end}}
+  </a>
+  {{else}}
+  <p class="muted" style="padding:0 1rem;">No tickets found.</p>
+  {{end}}
+</div>
+{{end}}
+
+{{define "ticket_detail_pane"}}
+<div class="ticket-detail-pane" id="ticket-detail-pane" {{if .Ticket}}data-ticket-id="{{.Ticket.ID}}"{{end}}>
+{{if not .Ticket}}
+  <p class="muted">Select a ticket to view details.</p>
+{{else}}
+  <div class="actions" style="justify-content:space-between;">
+    <h1>#{{.Ticket.ID}} {{.Ticket.Title}} <span id="live-badge" class="badge" data-status="New">live</span></h1>
+    <span class="badge" data-status="{{.Ticket.Status}}">{{.Ticket.Status}}</span>
+  </div>
+  <button type="button" class="details-chip" x-data x-on:click="$dispatch('open-details')">Details</button>
+
+  <div class="ticket-columns" x-data="{ detailsOpen: false }" x-on:open-details.window="detailsOpen = true">
+    <div>
+      <div class="card">
+        <p class="muted">Queue {{.Ticket.QueueID}} · Category {{.Ticket.Category}} · <span class="badge prio-{{.Ticket.Priority}}">{{.Ticket.Priority}}</span></p>
+        <div>{{markdown .Ticket.Description}}</div>
+
+        <div class="actions">
+          {{if .User.Role.IsAgent}}
+          {{if eq .Ticket.Status "New"}}
+            <form method="post" action="/tickets/{{.Ticket.ID}}/pickup"><button class="primary" type="submit">Pickup</button></form>
+          {{end}}
+          {{if eq .Ticket.Status "In Progress"}}
+            <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="resolve"><button class="primary" type="submit">Resolve</button></form>
+            <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reject"><button class="danger" type="submit">Reject</button></form>
+          {{end}}
+          {{end}}
+          {{if eq .Ticket.Status "Resolved"}}
+            <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="confirm"><button class="primary" type="submit">Confirm and close</button></form>
+            <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reopen"><button class="secondary" type="submit">Reopen</button></form>
+          {{end}}
+          {{if eq .Ticket.Status "Closed"}}
+            <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reopen"><button class="secondary" type="submit">Reopen</button></form>
+          {{end}}
+          {{if .Watching}}
+            <form method="post" action="/tickets/{{.Ticket.ID}}/unwatch"><button class="secondary" type="submit">Unwatch</button></form>
+          {{else}}
+            <form method="post" action="/tickets/{{.Ticket.ID}}/watch"><button class="secondary" type="submit">Watch</button></form>
+          {{end}}
+        </div>
+      </div>
+
+      {{if .Approvals}}
+      <div class="card">
+        <h3>Approvals</h3>
+        {{range .Approvals}}
+        <div class="actions" style="justify-content:space-between;">
+          <span>Step {{.Step}} · requires <strong>{{.ApproverRole}}</strong> · <span class="badge">{{.Status}}</span></span>
+          {{if eq .Status "pending"}}
+          <span class="actions">
+            <form method="post" action="/approvals/{{.ID}}/decide"><input type="hidden" name="decision" value="approve"><button class="primary" type="submit">Approve</button></form>
+            <form method="post" action="/approvals/{{.ID}}/decide"><input type="hidden" name="decision" value="reject"><button class="danger" type="submit">Reject</button></form>
+          </span>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
+      {{end}}
+
+      {{range .WaitingTasks}}
+      {{$form := index $.WaitingForms .ID}}
+      {{if $form.Fields}}
+      <div class="card">
+        <h3>Runbook: {{$form.WorkflowName}} needs input</h3>
+        <form class="stacked" method="post" action="/workflow-tasks/{{.ID}}/resume">
+          {{range $form.Fields}}
+          <label>{{.Label}}{{if .Required}} *{{end}}</label>
+          {{if eq .Type "select"}}
+          <select name="{{.Name}}" {{if .Required}}required{{end}}>
+            {{range .Options}}<option value="{{.}}">{{.}}</option>{{end}}
+          </select>
+          {{else}}
+          <input type="text" name="{{.Name}}" {{if .Required}}required{{end}}>
+          {{end}}
+          {{end}}
+          <div class="actions"><button class="primary" type="submit">Submit and continue</button></div>
+        </form>
+      </div>
+      {{end}}
+      {{end}}
+
+      <div class="card">
+        <h3>Conversation</h3>
+        <div class="thread">
+        {{range .Notes}}
+          {{if .Internal}}
+          <div class="internal-note-card">
+            <div class="internal-note-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 4.24A9.12 9.12 0 0112 4c5 0 9 4 10 8-.5 1.6-1.4 3.1-2.6 4.3M6.6 6.6C4.6 7.9 3 9.8 2 12c.7 2.2 2.1 4 4 5.3"/></svg>
+              Internal note
+            </div>
+            <div class="meta">{{index $.UserNames .AuthorID}} · {{.CreatedAt.Format "2006-01-02 15:04"}}</div>
+            {{markdown .Body}}
+          </div>
+          {{else if eq (index $.UserRoles .AuthorID) "Customer"}}
+          <div class="msg-bubble customer">
+            <div class="meta">{{index $.UserNames .AuthorID}} · {{.CreatedAt.Format "2006-01-02 15:04"}}</div>
+            {{markdown .Body}}
+          </div>
+          {{else}}
+          <div class="msg-bubble agent">
+            <div class="meta">{{index $.UserNames .AuthorID}} · {{.CreatedAt.Format "2006-01-02 15:04"}}</div>
+            {{markdown .Body}}
+          </div>
+          {{end}}
+        {{else}}
+          <p class="muted">No notes yet.</p>
+        {{end}}
+        </div>
+
+        <div class="composer" x-data="{ mode: 'reply' }" :class="{ 'mode-internal': mode === 'internal' }">
+          <form class="stacked" method="post" action="/tickets/{{.Ticket.ID}}/notes">
+            {{if ne .User.Role "Customer"}}
+            <div class="composer-segmented">
+              <button type="button" x-on:click="mode = 'reply'" :class="mode === 'reply' ? 'seg active' : 'seg'">Reply</button>
+              <button type="button" x-on:click="mode = 'internal'" :class="mode === 'internal' ? 'seg active' : 'seg'">Internal note</button>
+            </div>
+            <input type="hidden" name="internal" :value="mode === 'internal' ? 'on' : ''">
+            {{end}}
+            <textarea name="body" placeholder="Write a note, Markdown supported." required></textarea>
+            <div class="actions"><button class="primary" type="submit">Send</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket-properties" :class="{ open: detailsOpen }">
+      <div class="actions" style="justify-content:space-between;">
+        <h3 style="margin:0;">Details</h3>
+        <button type="button" class="link-btn" x-on:click="detailsOpen = false" :style="detailsOpen ? '' : 'display:none'">Close</button>
+      </div>
+
+      <div class="card">
+        <h3>Labels</h3>
+        {{range .Tags}}
+        <span class="tag {{if eq .Kind "rca"}}rca{{end}}">{{.Name}}
+          <form style="display:inline" method="post" action="/tickets/{{$.Ticket.ID}}/labels/{{.ID}}/delete"><button class="link-btn" type="submit">&times;</button></form>
+        </span>
+        {{else}}<p class="muted">No labels.</p>{{end}}
+        {{if .User.Role.IsAgent}}
+        <form class="stacked" method="post" action="/tickets/{{.Ticket.ID}}/labels">
+          <input type="text" name="name" placeholder="label name" required>
+          <select name="kind"><option value="incident">Incident</option><option value="rca">RCA</option></select>
+          <div class="actions"><button class="secondary" type="submit">Add label</button></div>
+        </form>
+        {{end}}
+      </div>
+
+      {{if .User.Role.AtLeast "QueueAdmin"}}
+      <div class="card">
+        <h3>Assign / Transfer</h3>
+        <form class="stacked" method="post" action="/tickets/{{.Ticket.ID}}/assign">
+          <select name="assignee_id">
+            {{range .Agents}}<option value="{{.ID}}" {{if assignedTo $.Ticket.AssigneeID .ID}}selected{{end}}>{{.Username}} ({{.Role}})</option>{{end}}
+          </select>
+          <div class="actions"><button class="secondary" type="submit">Assign</button></div>
+        </form>
+      </div>
+      {{end}}
+
+      {{if .Workflows}}
+      <div class="card">
+        <h3>Runbooks</h3>
+        {{range .Workflows}}
+        <form method="post" action="/tickets/{{$.Ticket.ID}}/runbooks/{{.ID}}/start" style="margin-bottom:0.5rem;">
+          <button class="secondary" type="submit">Start: {{.Name}}</button>
+        </form>
+        {{end}}
+      </div>
+      {{end}}
+
+      <div class="card">
+        <h3>Audit Trail</h3>
+        {{range .Events}}
+        <div class="note"><div class="meta">{{.CreatedAt.Format "2006-01-02 15:04"}} · {{.Event}}</div><code>{{.Details}}</code></div>
+        {{else}}<p class="muted">No events.</p>{{end}}
+      </div>
+    </div>
+    <div class="sheet-backdrop" x-show="detailsOpen" x-on:click="detailsOpen = false"></div>
+  </div>
+{{end}}
+</div>
+{{end}}

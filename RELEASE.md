@@ -5,6 +5,7 @@ This project isn't under version control yet (no git repo, no tags) — the entr
 | Version | Theme | Status |
 | :--- | :--- | :--- |
 | [v1.0.0](RELEASE/v_1.0.0.md) | ServiceDesk core: UI, multi-tenant, multi-user login | Built — see file for exact scope |
+| [v1.0.7](RELEASE/v_1.0.7.md) | Thoughtworks brand UI redesign | Built — see file for exact scope |
 | [v2.0.0](RELEASE/v_2.0.0.md) | Webhooks + MTTx metrics integration | Partially built now (webhooks); MTTx dashboards not started |
 | [v3.0.0](RELEASE/v_3.0.0.md) | AI/Agent collaboration | Not started |
 

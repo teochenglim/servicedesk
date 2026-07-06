@@ -1,0 +1,21 @@
+:root {
+  /* brand core */
+  --tw-teal-900: #033E4E;   /* dark teal, primary bg / headers */
+  --tw-teal-600: #48A2AB;   /* mid teal, links, accents, active states */
+  --tw-coral-500: #F46277;  /* coral, CTAs, subtitles, highlights */
+  --tw-sage-500: #6A9E77;   /* sage, breadcrumbs, section labels, success */
+  --tw-amber-500: #CF850C;  /* chart accent, warning */
+  --tw-purple-500: #644F7A; /* chart accent, secondary category */
+
+  /* neutrals */
+  --tw-white: #FFFFFF;
+  --tw-text-on-dark: #FFFFFF;
+  --tw-text-on-light: #033E4E;
+  --tw-border: rgba(3, 62, 78, 0.12);
+  --tw-surface: #FFFFFF;
+  --tw-surface-muted: #F4F7F7;
+
+  /* fonts */
+  --font-heading: "Bitter", serif;
+  --font-body: "Inter", sans-serif;
+}

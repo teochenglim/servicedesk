@@ -21,7 +21,7 @@
     <form style="display:inline" method="post" action="/queues/{{$.ID}}/members/{{.ID}}/remove"><button class="link-btn" type="submit">&times;</button></form>
     {{end}}
   </span>
-  {{else}}<p class="muted">No engineers assigned yet — nobody can pick up tickets from this queue.</p>{{end}}
+  {{else}}<p class="muted">No engineers assigned yet, nobody can pick up tickets from this queue.</p>{{end}}
 
   {{if $.User.Role.AtLeast "QueueAdmin"}}
   <form method="post" action="/queues/{{.ID}}/members" style="margin-top:0.6rem;">

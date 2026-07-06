@@ -101,6 +101,29 @@ func TestAuth_UnauthenticatedRedirectsToLogin(t *testing.T) {
 
 // --- ticket lifecycle / state machine ------------------------------------
 
+func TestTicketDetail_ShowsListPaneAlongside(t *testing.T) {
+	env := newTestEnv(t)
+	admin := env.client()
+	admin.mustLogin("", "admin", "admin123")
+	admin.mustPost(t, "/tickets", url.Values{
+		"title": {"First ticket"}, "description": {"d"}, "queue_id": {"1"}, "priority": {"P2"}, "category": {"infra"},
+	})
+	admin.mustPost(t, "/tickets", url.Values{
+		"title": {"Second ticket"}, "description": {"d"}, "queue_id": {"1"}, "priority": {"P3"}, "category": {"infra"},
+	})
+
+	body := bodyString(t, admin.get("/tickets/1"))
+	if !strings.Contains(body, "First ticket") {
+		t.Fatal("detail page should show the selected ticket")
+	}
+	if !strings.Contains(body, "Second ticket") {
+		t.Fatal("detail page should still show the other ticket in the list pane")
+	}
+	if !strings.Contains(body, `id="ticket-detail-pane"`) {
+		t.Fatal("detail pane must expose #ticket-detail-pane for the htmx hx-select swap target")
+	}
+}
+
 func TestTicket_FullLifecycle(t *testing.T) {
 	env := newTestEnv(t)
 	admin := env.client()

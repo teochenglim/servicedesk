@@ -8,6 +8,7 @@ The full design doc has been split into `DESIGN/` so each concern is easy to fin
 4. [DESIGN/04_design_runbook_hook.md](DESIGN/04_design_runbook_hook.md) — the workflow engine and Runbook Hook automation
 5. [DESIGN/05_design_non_functional_requirements.md](DESIGN/05_design_non_functional_requirements.md) — performance, security, observability, extensibility
 6. [DESIGN/06_design_technical_architecture.md](DESIGN/06_design_technical_architecture.md) — stack, database dialects, deployment topology
+7. [DESIGN/07_design_ui.md](DESIGN/07_design_ui.md) — Thoughtworks brand tokens, layout, and component design for the frontend
 
 Related docs:
 - [README.md](README.md) — how to run it
