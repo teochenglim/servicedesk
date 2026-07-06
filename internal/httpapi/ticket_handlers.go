@@ -14,8 +14,9 @@ import (
 )
 
 type baseData struct {
-	Title string
-	User  *userView
+	Title    string
+	User     *userView
+	DemoMode bool
 }
 
 type userView struct {
@@ -27,9 +28,9 @@ type userView struct {
 func (s *Server) base(r *http.Request, title string) baseData {
 	c := middleware.ClaimsFrom(r.Context())
 	if c == nil {
-		return baseData{Title: title}
+		return baseData{Title: title, DemoMode: s.demoMode}
 	}
-	return baseData{Title: title, User: &userView{UserID: c.UserID, Username: c.Username, Role: c.Role}}
+	return baseData{Title: title, DemoMode: s.demoMode, User: &userView{UserID: c.UserID, Username: c.Username, Role: c.Role}}
 }
 
 type ticketsWorkspaceData struct {

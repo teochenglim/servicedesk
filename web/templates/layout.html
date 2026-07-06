@@ -15,11 +15,17 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/tickets">ServiceDesk</a>
+    {{if .DemoMode}}<span class="demo-badge" title="This instance is seeded with demo data">DEMO MODE</span>{{end}}
     {{if .User}}
     <div class="search">
       <input type="text" placeholder="Search tickets..." onkeydown="if(event.key==='Enter'){window.location='/tickets?q='+encodeURIComponent(this.value)}">
     </div>
     <span class="spacer"></span>
+    {{if and .DemoMode (eq .User.Role "SystemAdmin")}}
+    <form method="post" action="/admin/demo/reset" style="display:inline" onsubmit="return confirm('Reset all demo data? This discards anything changed during this demo.')">
+      <button class="icon-btn" type="submit" title="Reset demo data">Reset demo data</button>
+    </form>
+    {{end}}
     <a class="btn-new" href="/tickets/new">New ticket</a>
     <span class="whoami">{{.User.Username}} · {{.User.Role}}</span>
     <span class="avatar">{{slice .User.Username 0 1}}<span class="status-dot"></span></span>

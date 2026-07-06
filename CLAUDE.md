@@ -24,7 +24,7 @@ Licensed [Apache 2.0](LICENSE). Current version lives in [VERSION](VERSION), not
 | Page templates | `web/templates/*.html` (embedded via `web/embed.go`) |
 | CSS/JS (vendored, no build step) | `web/static/{css,js}` |
 | Background workers | `internal/workflow` (workflow/runbook engine), `internal/webhook` (delivery outbox) |
-| Config keys | `internal/config/config.go` (env var + YAML field, both) |
+| Config keys | `internal/config/config.go` (env var + YAML field, both), *and* the Configuration table in [README.md](README.md) — that table is the user-facing reference, config.go alone isn't enough |
 | New DB dialect quirk | branch on `r.db.Dialector.Name()` in the relevant repo file — see [DESIGN/06](DESIGN/06_design_technical_architecture.md) §6.3 for the existing branch points before adding another |
 | Tests | unit: alongside the package (`_test.go`, white-box); full-stack: `internal/httpapi/integration_test.go` using the `testEnv`/`client` helpers in that package |
 

@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -26,6 +27,10 @@ type Config struct {
 	WorkerPoolSize   int
 	WorkerPollMillis int
 	LogLevel         string // fatal|error|warning|info|debug
+
+	DemoMode     bool // DEMO_MODE / -demo: seed demo data on boot if the DB is empty
+	DemoReset    bool // DEMO_RESET / -demo-reset: wipe + reseed demo data on every boot
+	SeedDemoOnly bool // SEED_DEMO_ONLY / -seed-demo: seed demo data and exit, no server
 }
 
 // fileConfig mirrors Config with a friendlier YAML shape (nested db/smtp/worker
@@ -58,6 +63,9 @@ type fileConfig struct {
 		PoolSize *int `yaml:"pool_size"`
 		PollMs   *int `yaml:"poll_ms"`
 	} `yaml:"worker"`
+
+	DemoMode  *bool `yaml:"demo_mode"`
+	DemoReset *bool `yaml:"demo_reset"`
 }
 
 // Load builds the process config from, in increasing priority: hardcoded
@@ -65,7 +73,8 @@ type fileConfig struct {
 // then individual environment variables (so a mounted k8s ConfigMap can
 // still be overridden ad hoc without editing the file).
 func Load() Config {
-	f := loadFileConfig()
+	flags := parseCLIFlags()
+	f := loadFileConfig(flags.configPath)
 
 	c := Config{
 		Addr:             getEnv("SERVICEDESK_ADDR", fromPtr(f.Addr, ":8080")),
@@ -83,6 +92,12 @@ func Load() Config {
 		WorkerPoolSize:   getEnvInt("SERVICEDESK_WORKER_POOL_SIZE", workerIntField(f, "pool_size", 4)),
 		WorkerPollMillis: getEnvInt("SERVICEDESK_WORKER_POLL_MS", workerIntField(f, "poll_ms", 500)),
 		LogLevel:         getEnv("SERVICEDESK_LOG_LEVEL", fromPtr(f.LogLevel, "info")),
+		DemoMode:         flags.demoMode || getEnvBool("DEMO_MODE", fromBoolPtr(f.DemoMode, false)),
+		DemoReset:        flags.demoReset || getEnvBool("DEMO_RESET", fromBoolPtr(f.DemoReset, false)),
+		SeedDemoOnly:     flags.seedDemoOnly || getEnvBool("SEED_DEMO_ONLY", false),
+	}
+	if c.DemoReset {
+		c.DemoMode = true // -demo-reset/DEMO_RESET implies DemoMode
 	}
 	return c
 }
@@ -103,20 +118,31 @@ func (c Config) StaticUserEntries() [][3]string {
 	return out
 }
 
-func configFilePath() string {
-	fs := flag.NewFlagSet("servicedesk", flag.ContinueOnError)
-	fs.SetOutput(nil)
-	path := fs.String("config", "", "path to a YAML config file (see config.example.yaml)")
-	_ = fs.Parse(os.Args[1:])
-	if *path != "" {
-		return *path
-	}
-	return os.Getenv("SERVICEDESK_CONFIG_FILE")
+type cliFlags struct {
+	configPath   string
+	demoMode     bool
+	demoReset    bool
+	seedDemoOnly bool
 }
 
-func loadFileConfig() fileConfig {
+func parseCLIFlags() cliFlags {
+	fs := flag.NewFlagSet("servicedesk", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	path := fs.String("config", "", "path to a YAML config file (see config.example.yaml)")
+	demo := fs.Bool("demo", false, "seed demo data on boot if the database is empty (see RELEASE/v_1.0.8.md)")
+	demoReset := fs.Bool("demo-reset", false, "wipe and reseed demo data on every boot (implies -demo)")
+	seedOnly := fs.Bool("seed-demo", false, "seed demo data against the configured DB and exit, without starting the server")
+	_ = fs.Parse(os.Args[1:])
+
+	configPath := *path
+	if configPath == "" {
+		configPath = os.Getenv("SERVICEDESK_CONFIG_FILE")
+	}
+	return cliFlags{configPath: configPath, demoMode: *demo, demoReset: *demoReset, seedDemoOnly: *seedOnly}
+}
+
+func loadFileConfig(path string) fileConfig {
 	var f fileConfig
-	path := configFilePath()
 	if path == "" {
 		return f
 	}

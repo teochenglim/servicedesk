@@ -45,6 +45,8 @@ type Server struct {
 
 	engine *workflow.Engine
 	hub    *sse.Hub
+
+	demoMode bool
 }
 
 func NewServer(
@@ -130,6 +132,12 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /admin/users", adminOnly(s.handleUserCreate))
 	mux.Handle("GET /admin/custom-fields", queueAdminOnly(s.handleCustomFieldsList))
 	mux.Handle("POST /admin/custom-fields", queueAdminOnly(s.handleCustomFieldCreate))
+
+	// Only registered at all in demo mode, so it can't be discovered or hit on
+	// a real deployment (see RELEASE/v_1.0.8.md).
+	if s.demoMode {
+		mux.Handle("POST /admin/demo/reset", adminOnly(s.handleDemoReset))
+	}
 
 	mux.Handle("GET /events", protect(s.hub.Handler))
 	mux.HandleFunc("GET /health", s.handleHealth)

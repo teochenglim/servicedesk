@@ -12,6 +12,7 @@ import (
 	"servicedesk/internal/auth"
 	"servicedesk/internal/config"
 	"servicedesk/internal/db"
+	"servicedesk/internal/demo"
 	"servicedesk/internal/httpapi"
 	"servicedesk/internal/logging"
 	"servicedesk/internal/mailer"
@@ -62,6 +63,33 @@ func main() {
 	if err := auth.Bootstrap(users, cfg, log); err != nil {
 		logging.Fatal(log, "startup: failed to bootstrap users", "err", err)
 	}
+
+	// Demo seeding runs after auth.Bootstrap, never before: Bootstrap relies on
+	// the "system" actor being the very first row in the users table (see
+	// auth.SystemActorID) to land on ID 1.
+	if cfg.SeedDemoOnly {
+		if err := demo.Seed(gdb, log); err != nil {
+			logging.Fatal(log, "demo: seed failed", "err", err)
+		}
+		log.Info("demo: seed complete, exiting (SEED_DEMO_ONLY)")
+		return
+	}
+	if cfg.DemoMode {
+		if cfg.DemoReset {
+			if err := demo.Reset(gdb, log); err != nil {
+				logging.Fatal(log, "demo: reset failed", "err", err)
+			}
+		} else if empty, err := demo.Empty(gdb); err != nil {
+			logging.Fatal(log, "demo: could not check for existing data", "err", err)
+		} else if empty {
+			if err := demo.Seed(gdb, log); err != nil {
+				logging.Fatal(log, "demo: seed failed", "err", err)
+			}
+		} else {
+			log.Info("demo: DEMO_MODE set but database already has data, skipping seed")
+		}
+	}
+
 	authMgr := auth.NewManager(cfg.JWTSecret, cfg.JWTIssuer)
 
 	hub := sse.NewHub(watchers, tickets)
@@ -78,6 +106,7 @@ func main() {
 		approvals, customFields, events, ticketSvc, noteSvc, problemSvc, engine, hub,
 	)
 	server.SetDB(gdb)
+	server.SetDemoMode(cfg.DemoMode)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

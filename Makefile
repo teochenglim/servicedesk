@@ -23,6 +23,10 @@ build: ## Build the servicedesk binary into ./bin
 run: ## Run the server locally (sqlite, ./servicedesk.db)
 	go run ./cmd/servicedesk
 
+.PHONY: demo
+demo: ## Run the server locally in demo mode (sqlite, seeds demo data on first boot)
+	DEMO_MODE=true go run ./cmd/servicedesk
+
 .PHONY: test
 test: ## Run the full test suite
 	go test ./...

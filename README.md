@@ -14,7 +14,16 @@ go run ./cmd/servicedesk
 
 Visit `http://localhost:8080`. On first run, if `SERVICEDESK_STATIC_USERS` isn't set, a default `admin` / `admin123` account is created (the log will warn you to change it). Data is stored in `./servicedesk.db`.
 
-### Option 2 — Docker Compose
+### Option 2 — Demo mode (seeded data, zero setup)
+
+```bash
+make demo
+# or: DEMO_MODE=true go run ./cmd/servicedesk
+```
+
+Seeds 3 orgs, 2 queues, engineers/customers, ~15 tickets, a Problem, and a Runbook on first boot (skipped if the DB already has data — safe to restart). Logins: `demo.admin`/`demo1234` (QueueAdmin), `demo.engineer1..4`/`demo1234`, `demo.customer1..6`/`demo1234`. A "DEMO MODE" badge appears in the top bar, with a "Reset demo data" button for SystemAdmins. See [RELEASE/v_1.0.8.md](RELEASE/v_1.0.8.md).
+
+### Option 3 — Docker Compose
 
 ```bash
 make up          # sqlite, foreground   (docker-compose.yaml)
@@ -24,7 +33,7 @@ make up-postgres  # PostgreSQL-backed    (docker-compose-postgresql.yml)
 
 Run `make` with no arguments to see every available target.
 
-### Option 3 — Kubernetes
+### Option 4 — Kubernetes
 
 ```bash
 cp k8s/11-secret.example.yaml k8s/11-secret.yaml            # fill in real values
@@ -59,6 +68,9 @@ SERVICEDESK_CONFIG_FILE=config.yaml go run ./cmd/servicedesk
 | `SERVICEDESK_LOG_LEVEL` | `info` | `fatal` \| `error` \| `warning` \| `info` \| `debug`. |
 | `SERVICEDESK_SMTP_*` | *(empty)* | SMTP host/port/from/user/pass for email notifications; unset = logs instead of sending. |
 | `SERVICEDESK_WORKER_POOL_SIZE` / `_POLL_MS` | `4` / `500` | Background worker pool (webhooks + workflow engine). |
+| `DEMO_MODE` (or `-demo`) | `false` | Seed demo orgs/queues/users/tickets on boot if the DB is empty. See [RELEASE/v_1.0.8.md](RELEASE/v_1.0.8.md). |
+| `DEMO_RESET` (or `-demo-reset`) | `false` | With `DEMO_MODE`: wipe + reseed demo data on *every* boot, not just when empty. |
+| `SEED_DEMO_ONLY` (or `-seed-demo`) | `false` | Seed demo data against the configured DB and exit immediately, without starting the server. |
 
 ## Development
 

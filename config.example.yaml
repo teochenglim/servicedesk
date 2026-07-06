@@ -29,3 +29,8 @@ smtp:
 worker:
   pool_size: 4
   poll_ms: 500
+
+# Demo mode (see RELEASE/v_1.0.8.md) - none of this is required; DEMO_MODE=true
+# or -demo work standalone with no config file at all.
+demo_mode: false
+demo_reset: false
