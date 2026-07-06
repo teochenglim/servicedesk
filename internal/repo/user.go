@@ -37,7 +37,7 @@ func (r *UserRepo) Create(u *models.User) error {
 	return r.db.Create(u).Error
 }
 
-// UpsertStatic creates or refreshes a demo user sourced from GOATFLOW_STATIC_USERS.
+// UpsertStatic creates or refreshes a demo user sourced from SERVICEDESK_STATIC_USERS.
 func (r *UserRepo) UpsertStatic(username, passwordHash string, role models.Role) error {
 	u := models.User{Username: username, PasswordHash: passwordHash, Role: role, Source: "static"}
 	return r.db.Clauses(clause.OnConflict{

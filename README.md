@@ -12,7 +12,7 @@ See [DESIGN.md](DESIGN.md) for the full design, [ARCHITECTURE.md](ARCHITECTURE.m
 go run ./cmd/servicedesk
 ```
 
-Visit `http://localhost:8080`. On first run, if `GOATFLOW_STATIC_USERS` isn't set, a default `admin` / `admin123` account is created (the log will warn you to change it). Data is stored in `./servicedesk.db`.
+Visit `http://localhost:8080`. On first run, if `SERVICEDESK_STATIC_USERS` isn't set, a default `admin` / `admin123` account is created (the log will warn you to change it). Data is stored in `./servicedesk.db`.
 
 ### Option 2 — Docker Compose
 
@@ -55,7 +55,7 @@ SERVICEDESK_CONFIG_FILE=config.yaml go run ./cmd/servicedesk
 | `SERVICEDESK_DB_DRIVER` | `sqlite` | `sqlite` \| `mysql` \| `postgres`. |
 | `SERVICEDESK_DB_DSN` | `file:servicedesk.db?...` | Driver-specific DSN. |
 | `SERVICEDESK_JWT_SECRET` | dev placeholder | **Change this in production.** |
-| `GOATFLOW_STATIC_USERS` | *(empty)* | Demo accounts: `user:pass:Role,user2:pass2:Role2`. |
+| `SERVICEDESK_STATIC_USERS` | *(empty)* | Demo accounts: `user:pass:Role,user2:pass2:Role2`. |
 | `SERVICEDESK_LOG_LEVEL` | `info` | `fatal` \| `error` \| `warning` \| `info` \| `debug`. |
 | `SERVICEDESK_SMTP_*` | *(empty)* | SMTP host/port/from/user/pass for email notifications; unset = logs instead of sending. |
 | `SERVICEDESK_WORKER_POOL_SIZE` / `_POLL_MS` | `4` / `500` | Background worker pool (webhooks + workflow engine). |

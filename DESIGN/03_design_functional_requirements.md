@@ -81,5 +81,5 @@ See [02_design_roles_and_tenancy.md](02_design_roles_and_tenancy.md) §2.2 for t
 ## 3.9 Authentication
 
 - **Default**: DB authentication (bcrypt). A first-run `admin/admin123` account is created automatically if no static users are configured (with a startup warning to change it).
-- **Static Users**: `GOATFLOW_STATIC_USERS="alice:pass:SystemAdmin,bob:pass:Engineer"` for demos/testing.
+- **Static Users**: `SERVICEDESK_STATIC_USERS="alice:pass:SystemAdmin,bob:pass:Engineer"` for demos/testing.
 - **Multi-tenant login**: see §02.3. LDAP/OAuth2 remain documented extension points, not implemented (`LDAP_ENABLED` is parsed but not wired to a real directory yet).

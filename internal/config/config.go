@@ -16,7 +16,7 @@ type Config struct {
 	DBDSN            string
 	JWTSecret        string
 	JWTIssuer        string
-	StaticUsers      string // GOATFLOW_STATIC_USERS: "alice:pass:SystemAdmin,bob:pass:Engineer"
+	StaticUsers      string // SERVICEDESK_STATIC_USERS: "alice:pass:SystemAdmin,bob:pass:Engineer"
 	LDAPEnabled      bool
 	SMTPHost         string
 	SMTPPort         int
@@ -73,7 +73,7 @@ func Load() Config {
 		DBDSN:            getEnv("SERVICEDESK_DB_DSN", dbStrField(f, "dsn", "file:servicedesk.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)")),
 		JWTSecret:        getEnv("SERVICEDESK_JWT_SECRET", jwtField(f, "secret", "dev-insecure-secret-change-me")),
 		JWTIssuer:        getEnv("SERVICEDESK_JWT_ISSUER", jwtField(f, "issuer", "servicedesk")),
-		StaticUsers:      getEnv("GOATFLOW_STATIC_USERS", fromPtr(f.StaticUsers, "")),
+		StaticUsers:      getEnv("SERVICEDESK_STATIC_USERS", fromPtr(f.StaticUsers, "")),
 		LDAPEnabled:      getEnvBool("LDAP_ENABLED", fromBoolPtr(f.LDAPEnabled, false)),
 		SMTPHost:         getEnv("SERVICEDESK_SMTP_HOST", smtpStrField(f, "host", "")),
 		SMTPPort:         getEnvInt("SERVICEDESK_SMTP_PORT", smtpIntField(f, "port", 587)),

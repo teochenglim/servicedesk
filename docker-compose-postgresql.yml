@@ -13,7 +13,7 @@ services:
       SERVICEDESK_DB_DRIVER: postgres
       SERVICEDESK_DB_DSN: "postgres://servicedesk:servicedesk@postgres:5432/servicedesk?sslmode=disable"
       SERVICEDESK_JWT_SECRET: ${SERVICEDESK_JWT_SECRET:-change-me-in-production}
-      GOATFLOW_STATIC_USERS: ${GOATFLOW_STATIC_USERS:-}
+      SERVICEDESK_STATIC_USERS: ${SERVICEDESK_STATIC_USERS:-}
       SERVICEDESK_LOG_LEVEL: ${SERVICEDESK_LOG_LEVEL:-info}
     depends_on:
       postgres:

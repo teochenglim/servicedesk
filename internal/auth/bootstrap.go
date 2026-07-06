@@ -23,7 +23,7 @@ func randomToken() string {
 // database, which Bootstrap guarantees by running before static users.
 const SystemActorID int64 = 1
 
-// Bootstrap seeds the reserved system actor and any GOATFLOW_STATIC_USERS
+// Bootstrap seeds the reserved system actor and any SERVICEDESK_STATIC_USERS
 // demo accounts (DESIGN.md 3.9), and a first-run admin login if none exists yet.
 func Bootstrap(users *repo.UserRepo, cfg config.Config, log *slog.Logger) error {
 	if _, err := users.GetByID(SystemActorID); err != nil {
@@ -62,7 +62,7 @@ func Bootstrap(users *repo.UserRepo, cfg config.Config, log *slog.Logger) error 
 			}); err != nil {
 				return err
 			}
-			log.Warn("auth: no GOATFLOW_STATIC_USERS set, created default admin/admin123 - change this password")
+			log.Warn("auth: no SERVICEDESK_STATIC_USERS set, created default admin/admin123 - change this password")
 		}
 	}
 	return nil

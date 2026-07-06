@@ -14,7 +14,7 @@ services:
       SERVICEDESK_DB_DRIVER: sqlite
       SERVICEDESK_DB_DSN: "file:/data/servicedesk.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
       SERVICEDESK_JWT_SECRET: ${SERVICEDESK_JWT_SECRET:-change-me-in-production}
-      GOATFLOW_STATIC_USERS: ${GOATFLOW_STATIC_USERS:-}
+      SERVICEDESK_STATIC_USERS: ${SERVICEDESK_STATIC_USERS:-}
       SERVICEDESK_LOG_LEVEL: ${SERVICEDESK_LOG_LEVEL:-info}
     volumes:
       - servicedesk-data:/data
