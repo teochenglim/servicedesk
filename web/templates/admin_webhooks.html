@@ -1,0 +1,31 @@
+{{define "admin_webhooks"}}
+{{template "header" .}}
+<h1>Webhooks</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<div class="card">
+<table>
+  <thead><tr><th>ID</th><th>URL</th><th>Events</th><th>Active</th><th></th></tr></thead>
+  <tbody>
+  {{range .Webhooks}}
+    <tr>
+      <td>{{.ID}}</td><td>{{.URL}}</td><td>{{.Events}}</td><td>{{.Active}}</td>
+      <td><form method="post" action="/admin/webhooks/{{.ID}}/delete" onsubmit="return confirm('Delete webhook?')"><button class="link-btn" type="submit">Delete</button></form></td>
+    </tr>
+  {{else}}<tr><td colspan="5" class="muted">No webhooks configured.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="card">
+  <h3>New webhook</h3>
+  <form class="stacked" method="post" action="/admin/webhooks">
+    <label>URL</label><input type="text" name="url" required placeholder="https://example.com/hook">
+    <label>Events (comma-separated, or * for all)</label>
+    <input type="text" name="events" placeholder="ticket.created,ticket.status_changed,note.added.external">
+    <label>Secret (HMAC-SHA256 signs the X-ServiceDesk-Signature header)</label>
+    <input type="text" name="secret">
+    <div class="actions"><button class="primary" type="submit">Create webhook</button></div>
+  </form>
+</div>
+{{template "footer" .}}
+{{end}}

@@ -1,0 +1,30 @@
+{{define "admin_customfields"}}
+{{template "header" .}}
+<h1>Custom Fields</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<div class="card">
+<table>
+  <thead><tr><th>Category</th><th>Name</th><th>Label</th><th>Type</th><th>Required</th></tr></thead>
+  <tbody>
+  {{range .Fields}}
+    <tr><td>{{.Category}}</td><td>{{.Name}}</td><td>{{.Label}}</td><td>{{.Type}}</td><td>{{.Required}}</td></tr>
+  {{else}}<tr><td colspan="5" class="muted">No custom fields defined.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="card">
+  <h3>New custom field</h3>
+  <form class="stacked" method="post" action="/admin/custom-fields">
+    <label>Category (matches ticket Category)</label><input type="text" name="category" required>
+    <label>Field name (key)</label><input type="text" name="name" required>
+    <label>Label</label><input type="text" name="label" required>
+    <label>Type</label>
+    <select name="type"><option>text</option><option>number</option><option>dropdown</option><option>date</option><option>multiselect</option></select>
+    <label>Options (JSON array, for dropdown/multiselect)</label><input type="text" name="options" placeholder='["a","b"]'>
+    <label><input type="checkbox" name="required" style="width:auto; display:inline-block;"> Required</label>
+    <div class="actions"><button class="primary" type="submit">Create field</button></div>
+  </form>
+</div>
+{{template "footer" .}}
+{{end}}

@@ -1,0 +1,33 @@
+{{define "problem_detail"}}
+{{template "header" .}}
+<h1>Problem #{{.Problem.ID}}: {{.Problem.Title}}</h1>
+
+<div class="card">
+  <h3>Root Cause</h3><p>{{.Problem.RootCause}}</p>
+  <h3>Resolution</h3><p>{{.Problem.Resolution}}</p>
+  <h3>Preventive Measures</h3><p>{{.Problem.PreventiveMeasures}}</p>
+</div>
+
+<div class="card">
+  <h3>Linked Tickets</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Title</th><th>Status</th></tr></thead>
+    <tbody>
+    {{range .Tickets}}
+      <tr onclick="window.location='/tickets/{{.ID}}'" style="cursor:pointer">
+        <td>#{{.ID}}</td><td>{{.Title}}</td><td><span class="badge status-{{.Status}}">{{.Status}}</span></td>
+      </tr>
+    {{else}}<tr><td colspan="3" class="muted">No tickets linked yet.</td></tr>{{end}}
+    </tbody>
+  </table>
+
+  {{if .User.Role.IsAgent}}
+  <form class="stacked" method="post" action="/problems/{{.Problem.ID}}/link">
+    <label>Ticket ID to link</label><input type="number" name="ticket_id" required>
+    <label>RCA label (optional)</label><input type="text" name="rca_label" placeholder="e.g. bad-deployment">
+    <div class="actions"><button class="secondary" type="submit">Link ticket</button></div>
+  </form>
+  {{end}}
+</div>
+{{template "footer" .}}
+{{end}}

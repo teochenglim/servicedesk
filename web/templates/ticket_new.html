@@ -1,0 +1,31 @@
+{{define "ticket_new"}}
+{{template "header" .}}
+<h1>New ticket</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<div class="card">
+<form class="stacked" method="post" action="/tickets">
+  <label for="title">Title</label>
+  <input id="title" type="text" name="title" required>
+
+  <label for="description">Description (Markdown supported)</label>
+  <textarea id="description" name="description"></textarea>
+
+  <label for="queue_id">Queue</label>
+  <select id="queue_id" name="queue_id" required>
+    {{range .Queues}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+
+  <label for="priority">Priority (blank = queue default)</label>
+  <select id="priority" name="priority">
+    <option value="">Queue default</option>
+    <option>P1</option><option>P2</option><option>P3</option><option>P4</option>
+  </select>
+
+  <label for="category">Category</label>
+  <input id="category" type="text" name="category" placeholder="e.g. database, network">
+
+  <div class="actions"><button class="primary" type="submit">Create ticket</button></div>
+</form>
+</div>
+{{template "footer" .}}
+{{end}}

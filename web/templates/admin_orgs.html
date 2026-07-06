@@ -1,0 +1,38 @@
+{{define "admin_orgs"}}
+{{template "header" .}}
+<h1>Organizations</h1>
+<p class="muted">Multi-tenant boundary: Customers log in with an organization name + username + password and only
+see tickets scoped to their organization. Engineers/QueueAdmins/SystemAdmins are not org-scoped.</p>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+
+{{range .Orgs}}
+<div class="card">
+  <h3>{{.Name}} <span class="muted">(#{{.ID}}{{if .ParentID}} · parent #{{.ParentID}}{{end}})</span></h3>
+  <h4>Customers in this org</h4>
+  {{$members := index $.Members .ID}}
+  {{range $members}}
+  <span class="tag">{{.Username}}
+    <form style="display:inline" method="post" action="/admin/orgs/{{$.ID}}/members/{{.ID}}/remove"><button class="link-btn" type="submit">&times;</button></form>
+  </span>
+  {{else}}<p class="muted">No customers assigned yet.</p>{{end}}
+
+  <form method="post" action="/admin/orgs/{{.ID}}/members" style="margin-top:0.6rem;">
+    <select name="user_id" style="width:auto; display:inline-block;">
+      {{range $.AllUsers}}<option value="{{.ID}}">{{.Username}}</option>{{end}}
+    </select>
+    <button class="secondary" type="submit">Add customer to org</button>
+  </form>
+</div>
+{{end}}
+
+<div class="card">
+  <h3>New organization</h3>
+  <form class="stacked" method="post" action="/admin/orgs">
+    <label>Name</label><input type="text" name="name" required placeholder="e.g. Acme Corp, or Acme Corp / Finance Dept">
+    <label>Parent org ID (optional — lets a Department point at its Company, a Company at its Group)</label>
+    <input type="number" name="parent_id">
+    <div class="actions"><button class="primary" type="submit">Create organization</button></div>
+  </form>
+</div>
+{{template "footer" .}}
+{{end}}

@@ -1,0 +1,73 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --border: #2a2f3a;
+  --text: #e6e8eb;
+  --muted: #9aa3af;
+  --accent: #5b8cff;
+  --danger: #e5566b;
+  --success: #3fbf7f;
+  --warn: #e0a83f;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg:#f6f7f9; --panel:#ffffff; --border:#e2e5ea; --text:#1a1d23; --muted:#5f6672; }
+}
+
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); }
+a { color: var(--accent); text-decoration:none; }
+a:hover { text-decoration: underline; }
+
+.topnav { display:flex; align-items:center; gap:1.25rem; padding:0.75rem 1.5rem; background:var(--panel); border-bottom:1px solid var(--border); }
+.topnav .brand { font-weight:700; color:var(--text); font-size:1.1rem; }
+.topnav .spacer { flex:1; }
+.topnav .whoami { color:var(--muted); font-size:0.9rem; }
+.link-btn { background:none; border:none; color:var(--accent); cursor:pointer; font:inherit; padding:0; }
+
+.container { max-width:1100px; margin:0 auto; padding:1.5rem; }
+
+h1, h2, h3 { font-weight:600; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:1.25rem; margin-bottom:1rem; }
+
+table { width:100%; border-collapse: collapse; }
+th, td { text-align:left; padding:0.5rem 0.6rem; border-bottom:1px solid var(--border); font-size:0.92rem; }
+th { color:var(--muted); font-weight:600; text-transform:uppercase; font-size:0.75rem; letter-spacing:0.03em; }
+tr:hover td { background: rgba(91,140,255,0.06); }
+
+.badge { display:inline-block; padding:0.15rem 0.55rem; border-radius:999px; font-size:0.75rem; font-weight:600; }
+.badge.status-New { background:rgba(91,140,255,0.15); color:var(--accent); }
+.badge.status-In-Progress { background:rgba(224,168,63,0.18); color:var(--warn); }
+.badge.status-Resolved { background:rgba(63,191,127,0.18); color:var(--success); }
+.badge.status-Closed { background:rgba(154,163,175,0.18); color:var(--muted); }
+.badge.status-Rejected { background:rgba(229,86,107,0.18); color:var(--danger); }
+.badge.prio-P1 { background:rgba(229,86,107,0.18); color:var(--danger); }
+.badge.prio-P2 { background:rgba(224,168,63,0.18); color:var(--warn); }
+.badge.prio-P3 { background:rgba(91,140,255,0.15); color:var(--accent); }
+.badge.prio-P4 { background:rgba(154,163,175,0.18); color:var(--muted); }
+.tag { display:inline-block; padding:0.1rem 0.5rem; border-radius:6px; font-size:0.75rem; background:var(--border); color:var(--text); margin-right:0.25rem; }
+.tag.rca { background:rgba(229,86,107,0.15); color:var(--danger); }
+
+form.stacked label { display:block; margin:0.6rem 0 0.25rem; font-size:0.85rem; color:var(--muted); }
+input, select, textarea, button { font:inherit; }
+input[type=text], input[type=password], input[type=number], input[type=date], select, textarea {
+  width:100%; padding:0.5rem 0.6rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;
+}
+textarea { min-height:6rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+button.primary, .btn { display:inline-block; padding:0.45rem 0.9rem; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
+button.secondary { padding:0.45rem 0.9rem; border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--text); cursor:pointer; }
+button.danger { border-color: var(--danger); background: var(--danger); color:#fff; }
+.actions { display:flex; gap:0.5rem; flex-wrap:wrap; margin:0.75rem 0; }
+
+.note { border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; margin-bottom:0.6rem; }
+.note.internal { background: rgba(224,168,63,0.06); border-color: rgba(224,168,63,0.35); }
+.note .meta { color:var(--muted); font-size:0.8rem; margin-bottom:0.35rem; }
+.note pre { overflow-x:auto; padding:0.75rem; border-radius:6px; }
+
+.filters { display:flex; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem; }
+.filters select, .filters input { width:auto; min-width:9rem; }
+
+.error { color: var(--danger); font-size:0.9rem; margin:0.5rem 0; }
+.muted { color: var(--muted); }
+.grid-2 { display:grid; grid-template-columns: 2fr 1fr; gap:1.25rem; align-items:start; }
+@media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }

@@ -1,0 +1,24 @@
+# Default deployment: sqlite, single binary, single container. No external
+# database needed - good for a demo or a small team's self-hosted instance.
+# For MySQL/PostgreSQL, use docker-compose-mysql.yml / docker-compose-postgresql.yml instead.
+name: servicedesk
+
+services:
+  app:
+    build: .
+    image: servicedesk:local
+    ports:
+      - "8080:8080"
+    environment:
+      SERVICEDESK_ADDR: ":8080"
+      SERVICEDESK_DB_DRIVER: sqlite
+      SERVICEDESK_DB_DSN: "file:/data/servicedesk.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
+      SERVICEDESK_JWT_SECRET: ${SERVICEDESK_JWT_SECRET:-change-me-in-production}
+      GOATFLOW_STATIC_USERS: ${GOATFLOW_STATIC_USERS:-}
+      SERVICEDESK_LOG_LEVEL: ${SERVICEDESK_LOG_LEVEL:-info}
+    volumes:
+      - servicedesk-data:/data
+    restart: unless-stopped
+
+volumes:
+  servicedesk-data:

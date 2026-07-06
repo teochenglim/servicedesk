@@ -1,0 +1,25 @@
+# Build artifacts
+bin/
+dist/
+servicedesk
+servicedesk.exe
+*.test
+*.out
+
+# Local sqlite dev database
+*.db
+*.db-wal
+*.db-shm
+
+# Local config/secrets (see config.example.yaml, k8s/*.example.yaml)
+config.yaml
+.env
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Coverage
+coverage.out
+coverage.html

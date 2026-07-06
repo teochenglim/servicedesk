@@ -1,0 +1,51 @@
+{{define "queues"}}
+{{template "header" .}}
+<h1>Queues</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+
+{{range .Queues}}
+<div class="card">
+  <div class="actions" style="justify-content:space-between;">
+    <h3>{{.Name}} <span class="muted">(#{{.ID}})</span></h3>
+    {{if $.User.Role.AtLeast "QueueAdmin"}}
+    <form method="post" action="/queues/{{.ID}}/delete" onsubmit="return confirm('Delete queue?')"><button class="link-btn" type="submit">Delete queue</button></form>
+    {{end}}
+  </div>
+  <p class="muted">Parent: {{if .ParentID}}{{.ParentID}}{{else}}-{{end}} · Default priority: {{.DefaultPriority}} · Default category: {{.DefaultCategory}}</p>
+
+  <h4>Engineers in this queue</h4>
+  {{$members := index $.Members .ID}}
+  {{range $members}}
+  <span class="tag">{{.Username}}
+    {{if $.User.Role.AtLeast "QueueAdmin"}}
+    <form style="display:inline" method="post" action="/queues/{{$.ID}}/members/{{.ID}}/remove"><button class="link-btn" type="submit">&times;</button></form>
+    {{end}}
+  </span>
+  {{else}}<p class="muted">No engineers assigned yet — nobody can pick up tickets from this queue.</p>{{end}}
+
+  {{if $.User.Role.AtLeast "QueueAdmin"}}
+  <form method="post" action="/queues/{{.ID}}/members" style="margin-top:0.6rem;">
+    <select name="user_id" style="width:auto; display:inline-block;">
+      {{range $.AllUsers}}<option value="{{.ID}}">{{.Username}} ({{.Role}})</option>{{end}}
+    </select>
+    <button class="secondary" type="submit">Add to queue</button>
+  </form>
+  {{end}}
+</div>
+{{end}}
+
+{{if .User.Role.AtLeast "QueueAdmin"}}
+<div class="card">
+  <h3>New queue</h3>
+  <form class="stacked" method="post" action="/queues">
+    <label>Name</label><input type="text" name="name" required placeholder="e.g. Engineers, Networking">
+    <label>Parent queue ID (optional)</label><input type="number" name="parent_id">
+    <label>Default priority</label>
+    <select name="default_priority"><option>P1</option><option>P2</option><option selected>P3</option><option>P4</option></select>
+    <label>Default category</label><input type="text" name="default_category">
+    <div class="actions"><button class="primary" type="submit">Create queue</button></div>
+  </form>
+</div>
+{{end}}
+{{template "footer" .}}
+{{end}}

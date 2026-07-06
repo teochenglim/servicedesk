@@ -1,0 +1,16 @@
+{{define "admin_index"}}
+{{template "header" .}}
+<h1>Admin</h1>
+<div class="card">
+  <ul>
+    <li><a href="/admin/orgs">Organizations (multi-tenant)</a></li>
+    <li><a href="/admin/users">Users &amp; Roles</a></li>
+    <li><a href="/admin/webhooks">Webhooks</a></li>
+    <li><a href="/admin/workflows">Workflows &amp; Runbooks</a></li>
+    <li><a href="/admin/custom-fields">Custom Fields</a></li>
+    <li><a href="/queues">Queues</a></li>
+    <li><a href="/metrics">Prometheus metrics</a></li>
+  </ul>
+</div>
+{{template "footer" .}}
+{{end}}

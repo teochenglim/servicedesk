@@ -1,0 +1,14 @@
+# Non-secret settings. DB driver defaults to postgres here since sqlite can't
+# scale past one replica (single writer, no shared storage across pods) -
+# DESIGN.md 5 requires a stateless, horizontally scalable deployment.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: servicedesk-config
+data:
+  SERVICEDESK_ADDR: ":8080"
+  SERVICEDESK_DB_DRIVER: "postgres"
+  SERVICEDESK_DB_DSN: "postgres://servicedesk:servicedesk@servicedesk-postgres:5432/servicedesk?sslmode=disable"
+  SERVICEDESK_LOG_LEVEL: "info"
+  SERVICEDESK_WORKER_POOL_SIZE: "4"
+  SERVICEDESK_WORKER_POLL_MS: "500"

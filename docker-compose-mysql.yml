@@ -1,0 +1,40 @@
+# MySQL-backed deployment. Run with:
+#   docker compose -f docker-compose-mysql.yml up --build
+name: servicedesk-mysql
+
+services:
+  app:
+    build: .
+    image: servicedesk:local
+    ports:
+      - "8080:8080"
+    environment:
+      SERVICEDESK_ADDR: ":8080"
+      SERVICEDESK_DB_DRIVER: mysql
+      SERVICEDESK_DB_DSN: "servicedesk:servicedesk@tcp(mysql:3306)/servicedesk?parseTime=true&multiStatements=false"
+      SERVICEDESK_JWT_SECRET: ${SERVICEDESK_JWT_SECRET:-change-me-in-production}
+      GOATFLOW_STATIC_USERS: ${GOATFLOW_STATIC_USERS:-}
+      SERVICEDESK_LOG_LEVEL: ${SERVICEDESK_LOG_LEVEL:-info}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:9
+    environment:
+      MYSQL_DATABASE: servicedesk
+      MYSQL_USER: servicedesk
+      MYSQL_PASSWORD: servicedesk
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-change-me}
+    volumes:
+      - servicedesk-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root-change-me}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  servicedesk-mysql-data:

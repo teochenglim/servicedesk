@@ -1,0 +1,28 @@
+{{define "admin_users"}}
+{{template "header" .}}
+<h1>Users &amp; Roles</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<div class="card">
+<table>
+  <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Source</th></tr></thead>
+  <tbody>
+  {{range .Users}}
+    <tr><td>{{.ID}}</td><td>{{.Username}}</td><td>{{.Email}}</td><td>{{.Role}}</td><td>{{.Source}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="card">
+  <h3>New user</h3>
+  <form class="stacked" method="post" action="/admin/users">
+    <label>Username</label><input type="text" name="username" required>
+    <label>Email</label><input type="text" name="email">
+    <label>Password</label><input type="password" name="password" required>
+    <label>Role</label>
+    <select name="role">{{range .Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+    <div class="actions"><button class="primary" type="submit">Create user</button></div>
+  </form>
+</div>
+{{template "footer" .}}
+{{end}}

@@ -1,0 +1,31 @@
+# Copy to config.yaml and pass --config config.yaml (or set
+# SERVICEDESK_CONFIG_FILE=config.yaml) to start the binary from a file
+# instead of environment variables. Any SERVICEDESK_* env var still
+# overrides the matching value below, so this is safe to check into a
+# repo/ConfigMap and override per-environment with a handful of env vars.
+
+addr: ":8080"
+log_level: info          # fatal | error | warning | info | debug
+static_users: ""          # GOATFLOW_STATIC_USERS format: "alice:pass:SystemAdmin,bob:pass:Engineer"
+ldap_enabled: false
+
+db:
+  driver: sqlite           # sqlite | mysql | postgres
+  dsn: "file:servicedesk.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
+  # mysql example:   dsn: "servicedesk:servicedesk@tcp(mysql:3306)/servicedesk?parseTime=true"
+  # postgres example: dsn: "postgres://servicedesk:servicedesk@postgres:5432/servicedesk?sslmode=disable"
+
+jwt:
+  secret: "dev-insecure-secret-change-me"
+  issuer: servicedesk
+
+smtp:
+  host: ""
+  port: 587
+  from: servicedesk@example.com
+  user: ""
+  pass: ""
+
+worker:
+  pool_size: 4
+  poll_ms: 500

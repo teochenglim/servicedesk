@@ -1,0 +1,30 @@
+{{define "problems_list"}}
+{{template "header" .}}
+<h1>Problem Management</h1>
+<div class="card">
+<table>
+  <thead><tr><th>ID</th><th>Title</th><th>Created</th></tr></thead>
+  <tbody>
+  {{range .Problems}}
+    <tr onclick="window.location='/problems/{{.ID}}'" style="cursor:pointer">
+      <td>#{{.ID}}</td><td>{{.Title}}</td><td class="muted">{{.CreatedAt.Format "2006-01-02"}}</td>
+    </tr>
+  {{else}}<tr><td colspan="3" class="muted">No problems recorded.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+{{if .User.Role.IsAgent}}
+<div class="card">
+  <h3>New problem (RCA record)</h3>
+  <form class="stacked" method="post" action="/problems">
+    <label>Title</label><input type="text" name="title" required>
+    <label>Root Cause</label><textarea name="root_cause"></textarea>
+    <label>Resolution</label><textarea name="resolution"></textarea>
+    <label>Preventive Measures</label><textarea name="preventive_measures"></textarea>
+    <div class="actions"><button class="primary" type="submit">Create problem</button></div>
+  </form>
+</div>
+{{end}}
+{{template "footer" .}}
+{{end}}

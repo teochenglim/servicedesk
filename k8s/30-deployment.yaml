@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: servicedesk
+spec:
+  replicas: 2 # stateless app tier (DESIGN.md 5): safe to run >1 replica against postgres/mysql
+  selector:
+    matchLabels:
+      app: servicedesk
+  template:
+    metadata:
+      labels:
+        app: servicedesk
+    spec:
+      containers:
+        - name: servicedesk
+          image: servicedesk:latest # replace with your registry/tag, e.g. ghcr.io/you/servicedesk:v1.0.0
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: servicedesk-config
+            - secretRef:
+                name: servicedesk-secrets
+          readinessProbe:
+            httpGet: { path: /health, port: 8080 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }

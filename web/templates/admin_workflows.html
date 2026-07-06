@@ -1,0 +1,40 @@
+{{define "admin_workflows"}}
+{{template "header" .}}
+<h1>Workflows &amp; Runbooks</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<div class="card">
+<table>
+  <thead><tr><th>ID</th><th>Name</th><th>Trigger</th><th>Runbook?</th><th>Active</th></tr></thead>
+  <tbody>
+  {{range .Workflows}}
+    <tr><td>{{.ID}}</td><td>{{.Name}}</td><td>{{.Trigger}}</td><td>{{.IsRunbook}}</td><td>{{.Active}}</td></tr>
+  {{else}}<tr><td colspan="5" class="muted">No workflows configured.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="card">
+  <h3>New workflow / runbook</h3>
+  <p class="muted">
+    Trigger is one of <code>ticket_created</code>, <code>status_changed</code>, <code>field_updated</code>, <code>note_added</code>.
+    Config is a JSON object with a <code>steps</code> array; step types: <code>condition</code>, <code>user_input</code>,
+    <code>http_request</code>, <code>template_render</code>, <code>add_note</code>, <code>auto_assign</code>, <code>webhook</code>,
+    <code>approval</code>, <code>notify</code>. See DESIGN.md section 4 for the incident-runbook example.
+  </p>
+  <form class="stacked" method="post" action="/admin/workflows">
+    <label>Name</label><input type="text" name="name" required>
+    <label>Trigger</label>
+    <select name="trigger">
+      <option value="ticket_created">ticket_created</option>
+      <option value="status_changed">status_changed</option>
+      <option value="field_updated">field_updated</option>
+      <option value="note_added">note_added</option>
+    </select>
+    <label><input type="checkbox" name="is_runbook" style="width:auto; display:inline-block;"> This is a Runbook (manually started from a ticket, not auto-triggered)</label>
+    <label>Config (JSON)</label>
+    <textarea name="config" style="min-height:12rem" placeholder='{"steps":[{"id":"gather_info","type":"user_input","fields":[{"name":"service_name","label":"Service","required":true}]},{"id":"fetch_deploys","type":"http_request","url":"https://ci.internal.com/deploys?service=&#123;&#123;.service_name&#125;&#125;","save_response_to":"deploy_events"},{"id":"draft_slack","type":"template_render","template":"Incident: &#123;&#123;.service_name&#125;&#125;","output_target":"ticket_external_note"}]}'></textarea>
+    <div class="actions"><button class="primary" type="submit">Create workflow</button></div>
+  </form>
+</div>
+{{template "footer" .}}
+{{end}}
