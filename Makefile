@@ -99,6 +99,14 @@ k8s-delete: ## Delete the k8s/ manifests from the current kubectl context
 k8s-logs: ## Tail logs from the servicedesk deployment in k8s
 	kubectl logs -f deployment/servicedesk
 
+## --- supply-chain hardening -------------------------------------------------
+
+.PHONY: github-action-bump
+github-action-bump: ## Pin .github/workflows/*.yml actions to latest release, full commit SHA (uses pinact)
+	go run github.com/suzuki-shunsuke/pinact/cmd/pinact@latest run --update
+	go run github.com/suzuki-shunsuke/pinact/cmd/pinact@latest run --verify
+	@echo "Actions bumped and verified. Review the diff, then run 'make vet test' and re-check semgrep before committing."
+
 ## --- release --------------------------------------------------------------
 
 .PHONY: version
