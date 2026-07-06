@@ -2,6 +2,8 @@
 
 A lightweight, self-hostable ITSM ticketing system: multi-tenant customer support, queue-based ticket routing, Markdown notes, labels, full-text search, real-time updates, a lightweight workflow engine with an interactive **Runbook Hook** for incident response, webhooks, and Prometheus metrics — shipped as a single Go binary + static HTML/HTMX frontend.
 
+![ServiceDesk](images/servicedesk.png)
+
 See [DESIGN.md](DESIGN.md) for the full design, [ARCHITECTURE.md](ARCHITECTURE.md) for how the code is organized, and [RELEASE.md](RELEASE.md) for what's shipped so far.
 
 ## Quickstart
