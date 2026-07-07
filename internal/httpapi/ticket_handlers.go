@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -77,6 +78,10 @@ type ticketsWorkspaceData struct {
 	// form and the ticket detail/triage view (RELEASE/v_2.1.0.md Service
 	// catalog) - always includable, empty selection means "unknown."
 	Services []models.Service
+	// KBSuggestion is the triage-time "similar past tickets" match
+	// (RELEASE/v_3.0.0.md) - nil when there's no AI panel/symptom yet, or
+	// nothing clears KBService.MatchForSymptom's threshold.
+	KBSuggestion *models.KBArticle
 }
 
 // loadTicketsList builds the ticket list query from request filters/view and
@@ -176,6 +181,27 @@ func parseServiceID(r *http.Request) (*int64, error) {
 	return &id, nil
 }
 
+// customFieldsFromForm collects every "cf_<name>" form field (rendered by
+// custom_fields_fragment.html, RELEASE/v_3.0.0.md) into the plain map
+// CreateTicketInput.CustomFields already expects - multi-value fields (a
+// multiselect's several selected <option>s sharing one name) become a
+// []string, everything else a single string.
+func customFieldsFromForm(form url.Values) map[string]any {
+	cf := map[string]any{}
+	for key, vals := range form {
+		name, ok := strings.CutPrefix(key, "cf_")
+		if !ok || len(vals) == 0 {
+			continue
+		}
+		if len(vals) > 1 {
+			cf[name] = vals
+		} else {
+			cf[name] = vals[0]
+		}
+	}
+	return cf
+}
+
 func (s *Server) handleTicketCreate(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.ClaimsFrom(r.Context())
 	if err := r.ParseForm(); err != nil {
@@ -189,12 +215,13 @@ func (s *Server) handleTicketCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t, err := s.ticketSvc.Create(claims, service.CreateTicketInput{
-		Title:       r.FormValue("title"),
-		Description: r.FormValue("description"),
-		Priority:    models.Priority(r.FormValue("priority")),
-		QueueID:     queueID,
-		Category:    r.FormValue("category"),
-		ServiceID:   serviceID,
+		Title:        r.FormValue("title"),
+		Description:  r.FormValue("description"),
+		Priority:     models.Priority(r.FormValue("priority")),
+		QueueID:      queueID,
+		Category:     r.FormValue("category"),
+		ServiceID:    serviceID,
+		CustomFields: customFieldsFromForm(r.Form),
 	})
 	if err != nil {
 		queues, _ := s.queues.List()
@@ -319,6 +346,7 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 	var agents []models.User
 	var workflows []models.Workflow
 	var aiSummary *service.SummarySnapshotView
+	var kbSuggestion *models.KBArticle
 	if claims.Role.IsAgent() {
 		for _, u := range allUsers {
 			if u.Role.IsAgent() {
@@ -338,6 +366,14 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 				aiSummary = snap
 			}
 		}
+		// Triage-time KB suggestion (DESIGN/08 §8.10, RELEASE/v_3.0.0.md) -
+		// matched against the panel's symptom field when one exists; silently
+		// skipped otherwise (e.g. AI disabled), same as the panel itself.
+		if symptom := symptomFromSummary(aiSummary); symptom != "" {
+			if match, score, merr := s.kbSvc.MatchForSymptom(symptom, ""); merr == nil && match != nil && score >= service.KBMatchThreshold {
+				kbSuggestion = match
+			}
+		}
 	}
 
 	services, err := s.serviceSvc.List()
@@ -351,8 +387,24 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 		Ticket: t, Notes: notes, Events: events, Tags: tags, Agents: agents,
 		Watching: watching, Workflows: workflows, WaitingTasks: waiting, WaitingForms: waitingForms,
 		Approvals: approvals, UserNames: userNames, UserRoles: userRoles, Attachments: attachments,
-		AISummary: aiSummary, Services: services,
+		AISummary: aiSummary, Services: services, KBSuggestion: kbSuggestion,
 	})
+}
+
+// symptomFromSummary reads the AI Ticket Intelligence Panel's "symptom"
+// field (SummaryFields is a generic map, not a dedicated struct field - see
+// summaryFieldOrder in internal/service/aisummary.go) for the triage-time KB
+// suggestion. Returns "" when there's no panel yet, same as an empty field.
+func symptomFromSummary(view *service.SummarySnapshotView) string {
+	if view == nil {
+		return ""
+	}
+	for _, f := range view.Fields {
+		if f.Key == "symptom" {
+			return f.Value
+		}
+	}
+	return ""
 }
 
 func ticketIDFromPath(r *http.Request) (int64, error) {

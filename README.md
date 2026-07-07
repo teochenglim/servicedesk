@@ -23,7 +23,7 @@ make demo
 # or: DEMO_MODE=true go run ./cmd/servicedesk
 ```
 
-Seeds 3 orgs, 2 queues, engineers/customers, ~15 tickets, a Problem, and a Runbook on first boot (skipped if the DB already has data — safe to restart). Logins: `demo.admin`/`demo1234` (Manager), `demo.engineer1..4`/`demo1234`, `demo.customer1..6`/`demo1234`. A "DEMO MODE" badge appears in the top bar, with a "Reset demo data" button for SystemAdmins. See [RELEASE/v_1.0.8.md](RELEASE/v_1.0.8.md).
+Seeds 3 orgs, 2 queues, a Service catalog, engineers/customers, ~15 tickets, a Problem, 2 Knowledge Base articles, and a Runbook on first boot (skipped if the DB already has data — safe to restart). A "DEMO MODE" badge appears in the top bar, with a "Reset demo data" button for SystemAdmins, and the login page offers a one-click picker for each seeded role. Full account list and a `curl`-only smoke test (`make demo-curl-test`) are in **[DEMO.md](DEMO.md)**. See also [RELEASE/v_1.0.8.md](RELEASE/v_1.0.8.md).
 
 ### Option 3 — Docker Compose
 

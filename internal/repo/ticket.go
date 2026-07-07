@@ -82,6 +82,15 @@ func (r *TicketRepo) ClaimNextBreach(now time.Time) (*models.Ticket, error) {
 	return &t, nil
 }
 
+// ListResolvedBetween backs the Manager dashboard's MTTx trend chart
+// (RELEASE/v_3.0.0.md) - every ticket resolved (even if since reopened and
+// re-resolved past the window) in [from, to), for daily bucketing in Go.
+func (r *TicketRepo) ListResolvedBetween(from, to time.Time) ([]models.Ticket, error) {
+	var ts []models.Ticket
+	err := r.db.Where("resolved_at >= ? AND resolved_at < ?", from, to).Order("resolved_at").Find(&ts).Error
+	return ts, err
+}
+
 // ListFilter drives the advanced filters + saved views from the PRD (3.7).
 type ListFilter struct {
 	Status     []string

@@ -22,6 +22,7 @@
     <label>URL</label><input type="text" name="url" required placeholder="https://example.com/hook">
     <label>Events (comma-separated, or * for all)</label>
     <input type="text" name="events" placeholder="ticket.created,ticket.status_changed,note.added.external">
+    <p class="muted">All events that fire today (RELEASE/v_3.0.0.md's coverage audit): <code>ticket.created</code>, <code>ticket.status_changed</code>, <code>ticket.assigned</code>, <code>ticket.mitigated</code>, <code>ticket.updated</code>, <code>ticket.label_added</code>, <code>note.added.external</code>, <code>note.added.internal</code>, <code>ticket.sla_breached</code>. (<code>workflow.notify</code> is real-time only today - it doesn't reach webhooks, see the audit note for why.)</p>
     <label>Secret (HMAC-SHA256 signs the X-ServiceDesk-Signature header)</label>
     <input type="text" name="secret">
     <div class="actions"><button class="primary" type="submit">Create webhook</button></div>

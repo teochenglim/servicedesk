@@ -74,11 +74,18 @@
   <button type="button" class="details-chip" x-data x-on:click="$dispatch('open-details')">Details</button>
 
   {{if .AISummary}}{{template "ai_summary_panel" .}}{{end}}
+  {{if .KBSuggestion}}
+  <div class="card">
+    <strong>Similar past tickets:</strong> <a href="/kb/{{.KBSuggestion.ID}}" target="_blank">{{.KBSuggestion.Title}}</a>
+    <p>{{.KBSuggestion.Resolution}}</p>
+  </div>
+  {{end}}
 
   <div class="ticket-columns" x-data="{ detailsOpen: false }" x-on:open-details.window="detailsOpen = true">
     <div>
       <div class="card">
         <p class="muted">{{if .User.Role.IsAgent}}Queue {{.Ticket.QueueID}} · {{end}}Category {{.Ticket.Category}} · <span class="badge prio-{{.Ticket.Priority}}">{{.Ticket.Priority}}</span></p>
+        {{range $k, $v := parseCustomFields .Ticket.CustomFields}}<p class="muted"><strong>{{$k}}:</strong> {{$v}}</p>{{end}}
         <div>{{markdown .Ticket.Description}}</div>
 
         {{if .User.Role.IsAgent}}

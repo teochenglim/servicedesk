@@ -38,6 +38,11 @@ type Server struct {
 	approvals    *repo.ApprovalRepo
 	customFields *repo.CustomFieldRepo
 	events       *repo.EventLogRepo
+	// tickets is a direct read-only repo handle (unlike ticketSvc below, which
+	// owns the state machine/mutations) - used for read-mostly queries with no
+	// business logic, e.g. the Manager dashboard's MTTx trend chart
+	// (RELEASE/v_3.0.0.md), matching how queues/users are already handled.
+	tickets *repo.TicketRepo
 
 	ticketSvc     *service.TicketService
 	noteSvc       *service.NoteService
@@ -63,7 +68,7 @@ func NewServer(
 	queues *repo.QueueRepo, queueMembers *repo.QueueMembershipRepo,
 	tags *repo.TagRepo, watchers *repo.WatcherRepo,
 	webhooks *repo.WebhookRepo, workflows *repo.WorkflowRepo, workflowTask *repo.WorkflowTaskRepo,
-	approvals *repo.ApprovalRepo, customFields *repo.CustomFieldRepo, events *repo.EventLogRepo,
+	approvals *repo.ApprovalRepo, customFields *repo.CustomFieldRepo, events *repo.EventLogRepo, tickets *repo.TicketRepo,
 	ticketSvc *service.TicketService, noteSvc *service.NoteService, problemSvc *service.ProblemService,
 	attachmentSvc *service.AttachmentService, queueSvc *service.QueueService, sudoSvc *service.SudoService,
 	serviceSvc *service.ServiceCatalogService, kbSvc *service.KBService,
@@ -75,7 +80,7 @@ func NewServer(
 		users: users, orgs: orgs, orgMembers: orgMembers,
 		queues: queues, queueMembers: queueMembers, tags: tags, watchers: watchers,
 		webhooks: webhooks, workflows: workflows, workflowTask: workflowTask,
-		approvals: approvals, customFields: customFields, events: events,
+		approvals: approvals, customFields: customFields, events: events, tickets: tickets,
 		ticketSvc: ticketSvc, noteSvc: noteSvc, problemSvc: problemSvc, attachmentSvc: attachmentSvc,
 		queueSvc: queueSvc, sudoSvc: sudoSvc, serviceSvc: serviceSvc, kbSvc: kbSvc,
 		aiSummarySvc: aiSummarySvc, aiDraftSvc: aiDraftSvc, aiEnabled: aiEnabled,
@@ -107,7 +112,13 @@ func (s *Server) Routes() http.Handler {
 
 	mux.Handle("GET /tickets", protect(s.handleTicketsList))
 	mux.Handle("GET /tickets/new", protect(s.handleTicketNewPage))
+	// Dynamic custom fields on the ticket-create form (RELEASE/v_3.0.0.md) -
+	// any authenticated user, matches ticket creation itself.
+	mux.Handle("GET /custom-fields/for-category", protect(s.handleCustomFieldsForCategory))
 	mux.Handle("POST /tickets", protect(s.handleTicketCreate))
+	// Submission-time KB suggestion popup (DESIGN/08 §8.10, RELEASE/v_3.0.0.md) -
+	// not gated behind aiEnabled: KBService works independent of AI features.
+	mux.Handle("POST /tickets/match-symptom", protect(s.handleKBMatchSymptom))
 	mux.Handle("GET /tickets/{id}", protect(s.handleTicketDetail))
 	mux.Handle("POST /tickets/{id}/transition", protect(s.handleTicketTransition))
 	// Pickup is self-assign (any Engineer+); Assign/transfer to another
@@ -195,11 +206,13 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /admin/users", adminOnly(s.handleUserCreate))
 	mux.Handle("POST /admin/users/{id}/role", adminOnly(s.handleUserRoleUpdate))
 	mux.Handle("POST /admin/users/{id}/api-token", adminOnly(s.handleUserIssueAPIToken))
-	mux.Handle("GET /admin/custom-fields", queueAdminOnly(s.handleCustomFieldsList))
-	mux.Handle("POST /admin/custom-fields", queueAdminOnly(s.handleCustomFieldCreate))
-	// Service catalog (RELEASE/v_2.1.0.md) - SystemAdmin-only, same gate as
-	// Users/Webhooks/Workflows: a system-configuration concern, not a
-	// day-to-day queue/SLA concern like Queue/CustomFieldDef above.
+	// Custom field definitions (RELEASE/v_3.0.0.md) - SystemAdmin-only, same
+	// gate as Users/Webhooks/Workflows: defining the schema of what data gets
+	// collected is a system-configuration concern, distinct from Queue's
+	// day-to-day routing/SLA config (which stays Manager-owned via CapQueueOps).
+	mux.Handle("GET /admin/custom-fields", adminOnly(s.handleCustomFieldsList))
+	mux.Handle("POST /admin/custom-fields", adminOnly(s.handleCustomFieldCreate))
+	// Service catalog (RELEASE/v_2.1.0.md) - SystemAdmin-only, same reasoning.
 	mux.Handle("GET /admin/services", adminOnly(s.handleServicesList))
 	mux.Handle("POST /admin/services", adminOnly(s.handleServiceCreate))
 	mux.Handle("POST /admin/services/{id}", adminOnly(s.handleServiceUpdate))

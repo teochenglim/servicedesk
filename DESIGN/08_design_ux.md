@@ -315,13 +315,14 @@ Article lifecycle:
 1. Ticket resolves → the AI panel's final extraction (if AI is enabled and a snapshot exists; empty seed fields otherwise — the loop doesn't require AI) is proposed as a KB draft, either a new article or a diff against an existing similar one (matched via `KBService.MatchForSymptom` — simplest-first token-overlap scoring across published articles' symptom/what-to-observe fields; smarter matching is an enhancement, not a prerequisite).
 2. Human curation gate. An Engineer or ServiceDeskAdmin reviews and approves before anything publishes — nothing auto-publishes to a customer-facing surface. `GET /kb/review` is the curation queue.
 3. Published article stores every field above; `GET /kb` is the published, Customer-safe browse surface.
-4. **Deferred** (not yet built, v_2.1.0.md scope note): surfacing the matching article proactively at two points — to the Customer at submission ("This looks like it might be: {article title}. Try these steps first?" — always with an easy "didn't help, file the ticket anyway" path), and to the Engineer at triage ("Similar past tickets: {article}"). `MatchForSymptom` exists and is unit-tested; only the UI wiring at these two screens is deferred. `GET /kb` (plain manual browse/search) is what ships in its place for now.
+4. Surfacing the matching article at two points, shipped in [v_3.0.0.md](../RELEASE/v_3.0.0.md): an explicit "Check for existing solution" button at ticket submission (not live-as-you-type — the customer stays in control of when a check happens), matching against title+description since no AI panel exists yet at that point; and an automatic "Similar past tickets" block at Engineer/Manager/SystemAdmin triage, matched against the AI panel's `symptom` field once one exists. `GET /kb` (plain manual browse/search) remains available alongside both.
 
 ```
-[Submitting ticket...]                              ⚠ deferred - not yet wired
+[Submitting ticket...]
+🔍 Check for existing solution
 ⚡ This might be: "Checkout 504 after cert renewal window"
    Suggested steps: clear cache, retry after 5 min, check status page
-   [Try these first]   [Not it — file my ticket]
+   [View article]   [Not it, continue]
 ```
 
 The versioned snapshots in §8.9 matter beyond training a future model — they're also the raw material for this loop today, before any model retraining ever happens: a human curator can promote a good snapshot into a KB article manually from day one, and smarter suggestion-matching is an enhancement, not a prerequisite.

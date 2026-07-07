@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -16,8 +17,6 @@ type kbListData struct {
 
 // handleKBList is the published, customer-safe Knowledge Base browse surface
 // (DESIGN/08 §8.10) - any authenticated role, published articles only.
-// Submission-time/triage-time suggestion popups are a deferred follow-up
-// (RELEASE/v_2.1.0.md); this plain browse/search page is what ships this pass.
 func (s *Server) handleKBList(w http.ResponseWriter, r *http.Request) {
 	articles, err := s.kbSvc.ListPublished()
 	if err != nil {
@@ -158,4 +157,36 @@ func (s *Server) handleKBDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/kb/review", http.StatusSeeOther)
+}
+
+type kbMatchResponse struct {
+	ID         int64  `json:"id,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Resolution string `json:"resolution,omitempty"`
+}
+
+// handleKBMatchSymptom is the submission-time suggestion popup's endpoint
+// (DESIGN/08 §8.10, closing out RELEASE/v_3.0.0.md's deferred item) - no AI
+// summary exists yet at ticket submission, so it matches directly against
+// the rough title+description text the customer has typed so far. Returns
+// an empty JSON object when nothing clears KBService's match threshold, so
+// the frontend can render "no suggestion" without a special-cased status code.
+func (s *Server) handleKBMatchSymptom(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	symptom := r.FormValue("title") + " " + r.FormValue("description")
+	match, score, err := s.kbSvc.MatchForSymptom(symptom, "")
+	if err != nil {
+		s.log.Error("kb: match symptom failed", "err", err)
+		http.Error(w, "could not check the knowledge base", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if match == nil || score < service.KBMatchThreshold {
+		json.NewEncoder(w).Encode(kbMatchResponse{})
+		return
+	}
+	json.NewEncoder(w).Encode(kbMatchResponse{ID: match.ID, Title: match.Title, Resolution: match.Resolution})
 }

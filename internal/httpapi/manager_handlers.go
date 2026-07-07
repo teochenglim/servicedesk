@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"fmt"
+	"html/template"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"servicedesk/internal/models"
@@ -38,11 +41,21 @@ type mttxSummary struct {
 	MTTD, MTTA, MTTM, MTTR string // humanDuration-formatted, "-" if no samples
 }
 
+// mttxTrendDays is the sparkline window (RELEASE/v_3.0.0.md) - "last N
+// shifts" from the original deferred item, read as calendar days since
+// there's no shift/roster concept anywhere else in this codebase.
+const mttxTrendDays = 14
+
 type managerDashboardData struct {
 	baseData
 	QueueStats    []queueStat
 	EngineerLoads []engineerLoad
 	MTTx          mttxSummary
+	MTTxTrendDays int
+	// MTTxTrend* are precomputed inline-SVG sparklines (12-point stat-tile
+	// convention) for self-hosted deployments without external Grafana/
+	// Prometheus - see computeMTTxTrend/sparklineSVG.
+	MTTDTrend, MTTATrend, MTTMTrend, MTTRTrend template.HTML
 }
 
 func (s *Server) handleManagerDashboard(w http.ResponseWriter, r *http.Request) {
@@ -62,12 +75,32 @@ func (s *Server) handleManagerDashboard(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	now := time.Now()
+	resolved, err := s.tickets.ListResolvedBetween(now.AddDate(0, 0, -mttxTrendDays), now.AddDate(0, 0, 1))
+	if err != nil {
+		s.log.Warn("manager dashboard: could not load MTTx trend data", "err", err)
+	}
+	trend := computeMTTxTrend(resolved, mttxTrendDays, now)
+
 	s.render.Render(w, "manager_dashboard", managerDashboardData{
 		baseData:      s.base(r, "Manager"),
 		QueueStats:    queueStats(tickets, queues),
 		EngineerLoads: engineerLoads(tickets, users),
 		MTTx:          computeMTTx(tickets),
+		MTTxTrendDays: mttxTrendDays,
+		MTTDTrend:     sparklineSVG(mttxSeries(trend, func(p mttxTrendPoint) float64 { return p.MTTDMin }), "var(--tw-teal-600)"),
+		MTTATrend:     sparklineSVG(mttxSeries(trend, func(p mttxTrendPoint) float64 { return p.MTTAMin }), "var(--tw-sage-500)"),
+		MTTMTrend:     sparklineSVG(mttxSeries(trend, func(p mttxTrendPoint) float64 { return p.MTTMMin }), "var(--tw-amber-500)"),
+		MTTRTrend:     sparklineSVG(mttxSeries(trend, func(p mttxTrendPoint) float64 { return p.MTTRMin }), "var(--tw-purple-500)"),
 	})
+}
+
+func mttxSeries(trend []mttxTrendPoint, pick func(mttxTrendPoint) float64) []float64 {
+	out := make([]float64, len(trend))
+	for i, p := range trend {
+		out[i] = pick(p)
+	}
+	return out
 }
 
 // queueStats aggregates open/breaching counts per queue. "Open" is anything
@@ -136,28 +169,105 @@ func engineerLoads(tickets []models.Ticket, users []models.User) []engineerLoad 
 	return result
 }
 
+// ticketMTTx returns one ticket's per-stage deltas, nil for any stage not
+// yet reached - shared by computeMTTx (current aggregate) and
+// computeMTTxTrend (daily buckets, RELEASE/v_3.0.0.md), so the two never
+// drift apart on what counts as each metric.
+func ticketMTTx(t models.Ticket) (mttd, mtta, mttm, mttr *time.Duration) {
+	if t.DetectedAt != nil {
+		d := t.DetectedAt.Sub(t.CreatedAt)
+		mttd = &d
+	}
+	if t.AckedAt != nil && t.DetectedAt != nil {
+		d := t.AckedAt.Sub(*t.DetectedAt)
+		mtta = &d
+	}
+	if t.MitigatedAt != nil && t.AckedAt != nil {
+		d := t.MitigatedAt.Sub(*t.AckedAt)
+		mttm = &d
+	}
+	if t.ResolvedAt != nil {
+		switch {
+		case t.MitigatedAt != nil:
+			d := t.ResolvedAt.Sub(*t.MitigatedAt)
+			mttr = &d
+		case t.AckedAt != nil:
+			d := t.ResolvedAt.Sub(*t.AckedAt)
+			mttr = &d
+		}
+	}
+	return
+}
+
 func computeMTTx(tickets []models.Ticket) mttxSummary {
 	var mttd, mtta, mttm, mttr durationAvg
 	for _, t := range tickets {
-		if t.DetectedAt != nil {
-			mttd.add(t.DetectedAt.Sub(t.CreatedAt))
+		d, a, m, r := ticketMTTx(t)
+		if d != nil {
+			mttd.add(*d)
 		}
-		if t.AckedAt != nil && t.DetectedAt != nil {
-			mtta.add(t.AckedAt.Sub(*t.DetectedAt))
+		if a != nil {
+			mtta.add(*a)
 		}
-		if t.MitigatedAt != nil && t.AckedAt != nil {
-			mttm.add(t.MitigatedAt.Sub(*t.AckedAt))
+		if m != nil {
+			mttm.add(*m)
 		}
-		if t.ResolvedAt != nil {
-			switch {
-			case t.MitigatedAt != nil:
-				mttr.add(t.ResolvedAt.Sub(*t.MitigatedAt))
-			case t.AckedAt != nil:
-				mttr.add(t.ResolvedAt.Sub(*t.AckedAt))
-			}
+		if r != nil {
+			mttr.add(*r)
 		}
 	}
 	return mttxSummary{MTTD: mttd.label(), MTTA: mtta.label(), MTTM: mttm.label(), MTTR: mttr.label()}
+}
+
+// mttxTrendPoint is one day's bucketed MTTx averages, in minutes (for
+// sparkline plotting) - a day with no ticket resolved gets 0 rather than
+// being dropped, so every sparkline stays evenly spaced across the window.
+type mttxTrendPoint struct {
+	Date                               string
+	MTTDMin, MTTAMin, MTTMMin, MTTRMin float64
+}
+
+// computeMTTxTrend buckets tickets (the caller scopes these to the window via
+// TicketRepo.ListResolvedBetween) by ResolvedAt's UTC calendar date into
+// `days` consecutive points ending "now," oldest first - reuses ticketMTTx's
+// exact per-ticket delta logic, just grouped by day instead of one running mean.
+func computeMTTxTrend(tickets []models.Ticket, days int, now time.Time) []mttxTrendPoint {
+	type bucket struct{ d, a, m, r durationAvg }
+	buckets := make(map[string]*bucket, days)
+	dates := make([]string, days)
+	for i := 0; i < days; i++ {
+		day := now.AddDate(0, 0, -(days - 1 - i)).UTC().Format("2006-01-02")
+		dates[i] = day
+		buckets[day] = &bucket{}
+	}
+	for _, t := range tickets {
+		if t.ResolvedAt == nil {
+			continue
+		}
+		b, ok := buckets[t.ResolvedAt.UTC().Format("2006-01-02")]
+		if !ok {
+			continue // outside the window - defensive, caller already scoped the query
+		}
+		d, a, m, r := ticketMTTx(t)
+		if d != nil {
+			b.d.add(*d)
+		}
+		if a != nil {
+			b.a.add(*a)
+		}
+		if m != nil {
+			b.m.add(*m)
+		}
+		if r != nil {
+			b.r.add(*r)
+		}
+	}
+	points := make([]mttxTrendPoint, days)
+	for i, day := range dates {
+		b := buckets[day]
+		points[i] = mttxTrendPoint{Date: day, MTTDMin: b.d.minutes(), MTTAMin: b.a.minutes(), MTTMMin: b.m.minutes(), MTTRMin: b.r.minutes()}
+	}
+	return points
 }
 
 // durationAvg accumulates a running mean without keeping every sample around.
@@ -179,6 +289,57 @@ func (d *durationAvg) label() string {
 		return "-"
 	}
 	return humanDuration(time.Duration(math.Round(float64(d.sum) / float64(d.count))))
+}
+
+// minutes is the mean in minutes (0 for an empty bucket), for sparkline
+// plotting where every day needs a plottable value, not a "-" placeholder.
+func (d *durationAvg) minutes() float64 {
+	if d.count == 0 {
+		return 0
+	}
+	return (float64(d.sum) / float64(d.count)) / float64(time.Minute)
+}
+
+// sparklineSVG renders a 12-point stat-tile trend line (dataviz skill's
+// "Figures" mark spec: a 2px de-emphasis-hue line, current period in the
+// series' accent) as a small inline SVG - no chart library, no build step,
+// consistent with this app's vendored-JS-only frontend. All-zero data (no
+// tickets resolved in the window yet) renders a flat baseline rather than
+// nothing, so the tile never looks broken.
+func sparklineSVG(values []float64, accent string) template.HTML {
+	const w, h, pad = 120.0, 28.0, 3.0
+	if len(values) == 0 {
+		return ""
+	}
+	maxVal := 0.0
+	for _, v := range values {
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	denom := len(values) - 1
+	if denom < 1 {
+		denom = 1
+	}
+	points := make([]string, len(values))
+	for i, v := range values {
+		x := pad + (w-2*pad)*float64(i)/float64(denom)
+		y := h - pad
+		if maxVal > 0 {
+			y = pad + (h-2*pad)*(1-v/maxVal)
+		}
+		points[i] = fmt.Sprintf("%.1f,%.1f", x, y)
+	}
+	last := points[len(points)-1]
+	lastXY := strings.SplitN(last, ",", 2)
+
+	svg := fmt.Sprintf(
+		`<svg width="%.0f" height="%.0f" viewBox="0 0 %.0f %.0f" role="img" aria-label="trend, last %d days"><title>Last %d days</title>`+
+			`<polyline points="%s" fill="none" stroke="var(--tw-border)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`+
+			`<circle cx="%s" cy="%s" r="3" fill="%s"/></svg>`,
+		w, h, w, h, len(values), len(values), strings.Join(points, " "), lastXY[0], lastXY[1], accent,
+	)
+	return template.HTML(svg)
 }
 
 // --- Activity list --------------------------------------------------------

@@ -27,6 +27,10 @@ run: ## Run the server locally (sqlite, ./servicedesk.db)
 demo: ## Run the server locally in demo mode (sqlite, seeds demo data on first boot)
 	DEMO_MODE=true go run ./cmd/servicedesk
 
+.PHONY: demo-curl-test
+demo-curl-test: ## Curl-only smoke test against an already-running demo-mode server (see DEMO.md)
+	./scripts/demo.sh
+
 .PHONY: test
 test: ## Run the full test suite
 	go test ./...

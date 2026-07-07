@@ -10,6 +10,7 @@ ServiceDesk: a single-binary Go ITSM ticketing system (multi-tenant, queue-based
 2. **[ARCHITECTURE.md](ARCHITECTURE.md)** — *how* the code is organized, request flow, layering rules, "adding a new entity" checklist. Read this before adding code.
 3. **[RELEASE.md](RELEASE.md)** → [RELEASE/](RELEASE/) — what's actually shipped vs. planned per version, plus real bugs found and how they were fixed. Check the relevant `v_x.y.z.md` before assuming a feature works a certain way.
 4. **[README.md](README.md)** — how to run it (local, Docker, k8s) and configuration reference.
+5. **[DEMO.md](DEMO.md)** — demo-mode account list and a `curl`-only smoke test (`make demo-curl-test`) for verifying a running instance without a browser.
 
 Licensed [Apache 2.0](LICENSE). Current version lives in [VERSION](VERSION), not hardcoded anywhere else.
 

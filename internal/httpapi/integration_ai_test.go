@@ -129,6 +129,28 @@ func TestAI_SummaryPanel_RegeneratesOnNoteAndLocksEditedField(t *testing.T) {
 	}
 }
 
+// TestAI_SummaryPanel_RegeneratesOnMitigationNote covers the gap fixed in
+// RELEASE/v_3.0.0.md: MarkMitigated's optional note bypasses NoteService.Add
+// (posted via repo.NoteRepo directly), so it needs its own regenerate call -
+// this asserts that actually fires, the same way a normal composer note does.
+func TestAI_SummaryPanel_RegeneratesOnMitigationNote(t *testing.T) {
+	fake := &llm.FakeClient{Response: `{"symptom":"","what_tried":"","problem_statement":"","diagnosis":"","mitigation":"applied workaround per note","resolution":""}`}
+	env := newTestEnvWithAI(t, fake)
+	admin := env.client()
+	admin.mustLogin("", "admin", "admin123")
+	admin.mustPost(t, "/tickets", url.Values{
+		"title": {"VPN drops"}, "description": {"d"}, "queue_id": {"1"}, "priority": {"P2"}, "category": {"net"},
+	})
+	admin.mustPost(t, "/tickets/1/pickup", nil)
+	admin.mustPost(t, "/tickets/1/mitigate", url.Values{"note": {"applied workaround"}})
+
+	if !pollUntil(t, 2*time.Second, func() bool {
+		return strings.Contains(bodyString(t, admin.get("/tickets/1")), "applied workaround per note")
+	}) {
+		t.Fatal("timed out waiting for the mitigation note to trigger an AI summary regeneration")
+	}
+}
+
 // pollUntil polls cond every 20ms until it returns true or timeout elapses.
 func pollUntil(t *testing.T, timeout time.Duration, cond func() bool) bool {
 	t.Helper()

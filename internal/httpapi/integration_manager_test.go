@@ -128,3 +128,33 @@ func TestManagerActivity_ShowsLatestNoteAndOrdersByRecency(t *testing.T) {
 		t.Errorf("expected 'Older ticket' (freshly noted) to sort above 'Newer ticket', got olderIdx=%d newerIdx=%d", olderIdx, newerIdx)
 	}
 }
+
+// TestManagerDashboard_MTTxTrendRendersSparklines covers RELEASE/v_3.0.0.md's
+// MTTx trend chart: resolving a ticket produces a real, non-flat sparkline on
+// the dashboard, not just the current-value summary line.
+func TestManagerDashboard_MTTxTrendRendersSparklines(t *testing.T) {
+	env := newTestEnv(t)
+	admin := env.client()
+	admin.mustLogin("", "admin", "admin123")
+	createUser(t, admin, "qadmin", "q@x.com", "pass123", "Manager")
+
+	admin.mustPost(t, "/tickets", url.Values{
+		"title": {"Disk full"}, "description": {"d"}, "queue_id": {"1"}, "priority": {"P1"}, "category": {"x"},
+	})
+	admin.mustPost(t, "/tickets/1/pickup", nil)
+	admin.mustPost(t, "/tickets/1/transition", url.Values{"action": {"resolve"}})
+
+	qadmin := env.client()
+	qadmin.mustLogin("", "qadmin", "pass123")
+	body := bodyString(t, qadmin.get("/manager"))
+
+	if !strings.Contains(body, "last 14 days") {
+		t.Error("expected the MTTx trend window label to render")
+	}
+	if strings.Count(body, "<svg") < 4 {
+		t.Errorf("expected 4 sparklines (MTTD/MTTA/MTTM/MTTR), got body: %s", body)
+	}
+	if !strings.Contains(body, `fill="var(--tw-teal-600)"`) {
+		t.Error("expected today's resolution to render a non-empty MTTD sparkline end-marker")
+	}
+}

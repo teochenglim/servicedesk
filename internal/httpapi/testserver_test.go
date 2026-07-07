@@ -116,7 +116,7 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 	}
 
 	kbSvc := service.NewKBService(kbArticles, tickets, aiSnapshots)
-	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, kbSvc, log)
+	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, kbSvc, aiTrigger, log)
 	noteSvc := service.NewNoteService(notes, events, watchers, tickets, hub, whDispatcher, engine, aiTrigger, log)
 	problemSvc := service.NewProblemService(problems, tags)
 	attachmentSvc := service.NewAttachmentService(attachments, notes, 10<<20)
@@ -127,7 +127,7 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 
 	srv := NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers,
-		webhooks, workflows, workflowTask, approvals, customFields, events,
+		webhooks, workflows, workflowTask, approvals, customFields, events, tickets,
 		ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc,
 		serviceSvc, kbSvc,
 		aiSummarySvc, aiDraftSvc, aiEnabled, engine, hub,

@@ -9,8 +9,8 @@ import (
 // TestServiceCatalog_CRUDIsSystemAdminOnly covers the "editable field, must
 // be CRUD using admin role" requirement (RELEASE/v_2.1.0.md): SystemAdmin can
 // create/edit/delete Service catalog rows; Manager/Engineer cannot, even
-// though Manager holds CapQueueOps (this is gated like Users/Webhooks, not
-// like Queues/CustomFieldDef).
+// though Manager holds CapQueueOps (this is gated like Users/Webhooks/
+// CustomFieldDef, not like Queue's day-to-day routing/SLA config).
 func TestServiceCatalog_CRUDIsSystemAdminOnly(t *testing.T) {
 	env := newTestEnv(t)
 	admin := env.client()
@@ -57,6 +57,34 @@ func TestServiceCatalog_CRUDIsSystemAdminOnly(t *testing.T) {
 	body = bodyString(t, admin.get("/admin/services"))
 	if strings.Contains(body, `Mail Service <span class="muted">(#`) {
 		t.Fatal("SystemAdmin delete should have removed the service")
+	}
+}
+
+// TestCustomFields_CRUDIsSystemAdminOnly covers moving CustomFieldDef CRUD
+// off Manager's CapQueueOps gate onto SystemAdmin (RELEASE/v_3.0.0.md) -
+// defining what data gets collected is a system-configuration concern, same
+// bucket as the Service catalog, not Queue's day-to-day routing/SLA config.
+func TestCustomFields_CRUDIsSystemAdminOnly(t *testing.T) {
+	env := newTestEnv(t)
+	admin := env.client()
+	admin.mustLogin("", "admin", "admin123")
+	createUser(t, admin, "qadmin", "q@x.com", "pass123", "Manager")
+
+	qadmin := env.client()
+	qadmin.mustLogin("", "qadmin", "pass123")
+
+	form := url.Values{"category": {"network"}, "name": {"vlan"}, "label": {"VLAN"}, "type": {"text"}}
+	if resp := qadmin.postForm("/admin/custom-fields", form); resp.StatusCode != 403 {
+		t.Fatalf("Manager POST /admin/custom-fields = %d, want 403 (even though Manager holds CapQueueOps)", resp.StatusCode)
+	}
+	if resp := qadmin.get("/admin/custom-fields"); resp.StatusCode != 403 {
+		t.Fatalf("Manager GET /admin/custom-fields = %d, want 403", resp.StatusCode)
+	}
+
+	admin.mustPost(t, "/admin/custom-fields", form)
+	body := bodyString(t, admin.get("/admin/custom-fields"))
+	if !strings.Contains(body, "vlan") {
+		t.Fatal("SystemAdmin should be able to create a custom field definition")
 	}
 }
 

@@ -28,18 +28,20 @@ type TicketService struct {
 	webhooks  WebhookDispatcher
 	workflows WorkflowTrigger
 	kb        KBProposalTrigger
+	aiSummary AISummaryTrigger
 	log       *slog.Logger
 }
 
 func NewTicketService(
 	tickets *repo.TicketRepo, events *repo.EventLogRepo, watchers *repo.WatcherRepo,
 	tags *repo.TagRepo, queues *repo.QueueRepo, notes *repo.NoteRepo, queueMembers *repo.QueueMembershipRepo,
-	notifier EventPublisher, webhooks WebhookDispatcher, workflows WorkflowTrigger, kb KBProposalTrigger, log *slog.Logger,
+	notifier EventPublisher, webhooks WebhookDispatcher, workflows WorkflowTrigger, kb KBProposalTrigger,
+	aiSummary AISummaryTrigger, log *slog.Logger,
 ) *TicketService {
 	return &TicketService{
 		tickets: tickets, events: events, watchers: watchers, tags: tags, queues: queues, notes: notes,
 		queueMembers: queueMembers,
-		notifier:     notifier, webhooks: webhooks, workflows: workflows, kb: kb, log: log,
+		notifier:     notifier, webhooks: webhooks, workflows: workflows, kb: kb, aiSummary: aiSummary, log: log,
 	}
 }
 
@@ -287,6 +289,19 @@ func (s *TicketService) MarkMitigated(actor *auth.Claims, ticketID int64, note s
 		} else {
 			s.fanOut("note.added.external", ticketID, n)
 			s.workflows.Trigger("note_added", ticketID, map[string]any{"note": n})
+			// Closes the gap noted in RELEASE/v_3.0.0.md: this note bypasses
+			// NoteService.Add (see comment above), which is otherwise the only
+			// place that re-triggers the AI panel - mirror its async,
+			// best-effort regenerate call so mitigation notes aren't silently
+			// invisible to the panel.
+			if s.aiSummary != nil {
+				noteID := n.ID
+				go func() {
+					if err := s.aiSummary.Regenerate(ticketID, &noteID); err != nil {
+						s.log.Warn("ai summary: regenerate failed", "ticket_id", ticketID, "note_id", noteID, "err", err)
+					}
+				}()
+			}
 		}
 	}
 

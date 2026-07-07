@@ -25,6 +25,25 @@
       <p class="muted">Internal staff (Engineer/Manager/SystemAdmin) can leave Organization blank.</p>
       <p class="muted">Demo: set <code>SERVICEDESK_STATIC_USERS</code> or use the auto-created <code>admin</code> account.</p>
     </div>
+    {{if .DemoMode}}
+    <div class="card" style="margin-top:1rem;">
+      <h3 style="margin-top:0;">Log in as (demo)</h3>
+      <div class="actions" style="flex-wrap:wrap;">
+        <button type="button" class="secondary" onclick="demoLogin('demo.customer1', 'demo1234', 'Acme Corp')">Customer</button>
+        <button type="button" class="secondary" onclick="demoLogin('demo.engineer1', 'demo1234', '')">Engineer</button>
+        <button type="button" class="secondary" onclick="demoLogin('demo.admin', 'demo1234', '')">Manager</button>
+        <button type="button" class="secondary" onclick="demoLogin('admin', 'admin123', '')">SystemAdmin</button>
+      </div>
+    </div>
+    <script>
+      function demoLogin(username, password, org) {
+        document.getElementById('org').value = org;
+        document.getElementById('username').value = username;
+        document.getElementById('password').value = password;
+        document.querySelector('form[action="/login"]').submit();
+      }
+    </script>
+    {{end}}
   </main>
 </body>
 </html>

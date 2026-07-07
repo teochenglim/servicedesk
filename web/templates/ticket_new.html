@@ -12,6 +12,8 @@
   {{if .AIEnabled}}
   <button type="button" class="link-btn" data-ai-url="/tickets/draft-description" data-ai-target="md-editor-description" data-ai-rough="1">&#10024; AI draft from what I have so far</button>
   {{end}}
+  <button type="button" class="link-btn" data-kb-match-url="/tickets/match-symptom" data-kb-match-target="kb-match-result">&#128269; Check for existing solution</button>
+  <div id="kb-match-result"></div>
 
   <label for="queue_id">Queue</label>
   <select id="queue_id" name="queue_id" required>
@@ -25,7 +27,9 @@
   </select>
 
   <label for="category">Category</label>
-  <input id="category" type="text" name="category" placeholder="e.g. database, network">
+  <input id="category" type="text" name="category" placeholder="e.g. database, network"
+         hx-get="/custom-fields/for-category" hx-trigger="change" hx-include="this" hx-target="#custom-fields">
+  <div id="custom-fields"></div>
 
   <label for="service_id">Impacted service (optional)</label>
   <select id="service_id" name="service_id">

@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
 	"time"
 
 	"servicedesk/internal/markdown"
@@ -18,12 +20,47 @@ var funcMap = template.FuncMap{
 	"assignedTo": func(assignee *int64, userID int64) bool {
 		return assignee != nil && *assignee == userID
 	},
-	"slaState":      func(due *time.Time) string { return slaStateAt(due, time.Now()) },
-	"slaLabel":      func(due *time.Time) string { return slaLabelAt(due, time.Now()) },
-	"stageProgress": stageProgressFunc,
-	"ordinal":       ordinal,
-	"dict":          dict,
-	"isInlineable":  service.IsInlineable,
+	"slaState":          func(due *time.Time) string { return slaStateAt(due, time.Now()) },
+	"slaLabel":          func(due *time.Time) string { return slaLabelAt(due, time.Now()) },
+	"stageProgress":     stageProgressFunc,
+	"ordinal":           ordinal,
+	"dict":              dict,
+	"isInlineable":      service.IsInlineable,
+	"parseOptions":      parseOptions,
+	"parseCustomFields": parseCustomFields,
+}
+
+// parseOptions unmarshals a CustomFieldDef.Options JSON array string (e.g.
+// `["a","b"]`) into a plain []string for a dropdown/multiselect template
+// range - malformed/empty JSON just yields no options rather than erroring
+// the whole page render.
+func parseOptions(raw string) []string {
+	var opts []string
+	_ = json.Unmarshal([]byte(raw), &opts)
+	return opts
+}
+
+// parseCustomFields unmarshals Ticket.CustomFields (a JSON object string)
+// for read-only display on the ticket detail page (RELEASE/v_3.0.0.md) -
+// values can be a plain string or (for a multiselect field) an array, so
+// this stringifies whatever comes back rather than assuming one shape.
+func parseCustomFields(raw string) map[string]string {
+	var vals map[string]any
+	_ = json.Unmarshal([]byte(raw), &vals)
+	out := make(map[string]string, len(vals))
+	for k, v := range vals {
+		switch t := v.(type) {
+		case []any:
+			parts := make([]string, len(t))
+			for i, p := range t {
+				parts[i] = fmt.Sprint(p)
+			}
+			out[k] = strings.Join(parts, ", ")
+		default:
+			out[k] = fmt.Sprint(t)
+		}
+	}
+	return out
 }
 
 // dict lets a template pass a small ad-hoc map literal into a {{template}}

@@ -13,10 +13,10 @@ import (
 
 var ErrKBNotDraft = errors.New("kb article is not a draft")
 
-// matchThreshold is a deliberately simple token-overlap cutoff - "simplest
+// KBMatchThreshold is a deliberately simple token-overlap cutoff - "simplest
 // first pass" per DESIGN/08 §8.10's own framing; smarter matching
 // (embeddings, etc.) is a future enhancement, not a prerequisite.
-const matchThreshold = 0.3
+const KBMatchThreshold = 0.3
 
 // KBService implements the Knowledge Base Feedback Loop (DESIGN/08 §8.10):
 // every resolved ticket becomes a candidate contribution to a living,
@@ -73,7 +73,7 @@ func (s *KBService) ProposeFromTicket(ticketID int64) (*models.KBArticle, error)
 		CreatedByID:      authorID,
 	}
 
-	if match, score, err := s.MatchForSymptom(symptom, ""); err == nil && match != nil && score >= matchThreshold {
+	if match, score, err := s.MatchForSymptom(symptom, ""); err == nil && match != nil && score >= KBMatchThreshold {
 		a.RelatedArticleID = &match.ID
 	}
 

@@ -1,0 +1,21 @@
+{{define "custom_fields_fragment"}}
+{{range .}}
+<label for="cf_{{.Name}}">{{.Label}}{{if .Required}} *{{end}}</label>
+{{if eq .Type "text"}}
+<input id="cf_{{.Name}}" type="text" name="cf_{{.Name}}" {{if .Required}}required{{end}}>
+{{else if eq .Type "number"}}
+<input id="cf_{{.Name}}" type="number" name="cf_{{.Name}}" {{if .Required}}required{{end}}>
+{{else if eq .Type "date"}}
+<input id="cf_{{.Name}}" type="date" name="cf_{{.Name}}" {{if .Required}}required{{end}}>
+{{else if eq .Type "dropdown"}}
+<select id="cf_{{.Name}}" name="cf_{{.Name}}" {{if .Required}}required{{end}}>
+  <option value=""></option>
+  {{range parseOptions .Options}}<option>{{.}}</option>{{end}}
+</select>
+{{else if eq .Type "multiselect"}}
+<select id="cf_{{.Name}}" name="cf_{{.Name}}" multiple {{if .Required}}required{{end}}>
+  {{range parseOptions .Options}}<option>{{.}}</option>{{end}}
+</select>
+{{end}}
+{{end}}
+{{end}}

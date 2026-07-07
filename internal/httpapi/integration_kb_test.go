@@ -1,9 +1,13 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"servicedesk/internal/llm"
 )
 
 // setupResolvedTicket creates an Engineer + Customer, files a ticket, and
@@ -88,5 +92,84 @@ func TestKB_ResolveProposesDraftExactlyOncePerResolution(t *testing.T) {
 	drafts = bodyString(t, eng.get("/kb/review"))
 	if strings.Count(drafts, "Vendor emails going to spam") != 2 {
 		t.Fatalf("expected exactly 2 independent drafts after reopen -> re-resolve, review queue: %s", drafts)
+	}
+}
+
+// TestKB_MatchSymptomEndpoint covers the submission-time suggestion popup's
+// backend (RELEASE/v_3.0.0.md): a published article with real Symptom/
+// WhatToObserve text matches similar wording and misses unrelated wording.
+func TestKB_MatchSymptomEndpoint(t *testing.T) {
+	env := newTestEnv(t)
+	_, eng, _ := setupResolvedTicket(t, env)
+	eng.mustPost(t, "/kb/1", url.Values{
+		"title": {"VPN drops"}, "symptom": {"vpn connection drops every ten minutes"},
+		"what_to_observe": {"session disconnects repeatedly"},
+	})
+	eng.mustPost(t, "/kb/1/approve", nil)
+
+	resp := eng.postForm("/tickets/match-symptom", url.Values{
+		"title": {""}, "description": {"vpn connection drops every few minutes"},
+	})
+	var out struct {
+		ID         int64  `json:"id"`
+		Title      string `json:"title"`
+		Resolution string `json:"resolution"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if out.ID != 1 || out.Title != "VPN drops" {
+		t.Fatalf("expected a match on article 1, got %+v", out)
+	}
+
+	resp = eng.postForm("/tickets/match-symptom", url.Values{
+		"title": {""}, "description": {"completely unrelated printer jam issue"},
+	})
+	out = struct {
+		ID         int64  `json:"id"`
+		Title      string `json:"title"`
+		Resolution string `json:"resolution"`
+	}{}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if out.ID != 0 {
+		t.Fatalf("expected no match for unrelated text, got %+v", out)
+	}
+}
+
+// TestKB_TriageSuggestionShowsOnDetailPage covers the triage-time half:
+// once the AI panel produces a "symptom" matching a published article, the
+// ticket detail page surfaces it to staff.
+func TestKB_TriageSuggestionShowsOnDetailPage(t *testing.T) {
+	fake := &llm.FakeClient{Response: `{"symptom":"vpn connection drops every few minutes","what_tried":"","problem_statement":"","diagnosis":"","mitigation":"","resolution":""}`}
+	env := newTestEnvWithAI(t, fake)
+	admin := env.client()
+	admin.mustLogin("", "admin", "admin123")
+
+	// First ticket becomes the published article a real Symptom comes from.
+	admin.mustPost(t, "/tickets", url.Values{
+		"title": {"VPN drops"}, "description": {"d"}, "queue_id": {"1"}, "priority": {"P2"}, "category": {"net"},
+	})
+	admin.mustPost(t, "/tickets/1/pickup", nil)
+	admin.mustPost(t, "/tickets/1/transition", url.Values{"action": {"resolve"}})
+	admin.mustPost(t, "/kb/1", url.Values{
+		"title": {"VPN drops"}, "symptom": {"vpn connection drops every ten minutes"},
+		"what_to_observe": {"session disconnects repeatedly"},
+	})
+	admin.mustPost(t, "/kb/1/approve", nil)
+
+	// Second ticket: its AI panel will extract a similar symptom once a note lands.
+	admin.mustPost(t, "/tickets", url.Values{
+		"title": {"VPN unstable"}, "description": {"d"}, "queue_id": {"1"}, "priority": {"P2"}, "category": {"net"},
+	})
+	admin.mustPost(t, "/tickets/2/notes", url.Values{"body": {"investigating"}})
+
+	if !pollUntil(t, 2*time.Second, func() bool {
+		return strings.Contains(bodyString(t, admin.get("/tickets/2")), "Similar past tickets")
+	}) {
+		t.Fatal("timed out waiting for the triage-time KB suggestion to appear")
 	}
 }

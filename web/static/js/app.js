@@ -62,14 +62,61 @@ function initAIDraftButtons(root) {
   });
 }
 
+// initKBMatchButtons wires the submission-time "Check for existing solution"
+// button (DESIGN/08 §8.10, RELEASE/v_3.0.0.md): posts the ticket-new form's
+// current title+description to data-kb-match-url on click (explicit, not
+// live-as-you-type), and renders a dismissible suggestion card into
+// data-kb-match-target when a match comes back - or "no match" copy when it
+// doesn't. Never auto-fills or auto-submits anything; filing the ticket
+// stays a separate, always-available action.
+function initKBMatchButtons(root) {
+  root.querySelectorAll("[data-kb-match-url]:not([data-kb-match-initialized])").forEach(function (btn) {
+    btn.dataset.kbMatchInitialized = "1";
+    btn.addEventListener("click", function (evt) {
+      evt.preventDefault();
+      var target = document.getElementById(btn.dataset.kbMatchTarget);
+      if (!target) return;
+      var form = btn.closest("form");
+      var title = form.querySelector("[name=title]");
+      var descMount = document.getElementById("md-editor-description");
+      var body = new URLSearchParams();
+      body.set("title", title ? title.value : "");
+      body.set("description", descMount && descMount.toastEditor ? descMount.toastEditor.getMarkdown() : "");
+
+      var original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Checking...";
+      fetch(btn.dataset.kbMatchUrl, { method: "POST", body: body })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.id) {
+            target.innerHTML =
+              '<div class="card"><strong>This might be:</strong> <a href="/kb/' + data.id + '" target="_blank">' +
+              data.title + "</a><p>" + (data.resolution || "") + "</p>" +
+              '<button type="button" class="link-btn" onclick="this.closest(\'.card\').remove()">Not it, continue</button></div>';
+          } else {
+            target.innerHTML = '<p class="muted">No existing article looks like a match yet.</p>';
+          }
+        })
+        .catch(function () {})
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = original;
+        });
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   hljs.highlightAll();
   initMarkdownEditors(document);
   initAIDraftButtons(document);
+  initKBMatchButtons(document);
   document.body.addEventListener("htmx:afterSwap", function () {
     hljs.highlightAll();
     initMarkdownEditors(document);
     initAIDraftButtons(document);
+    initKBMatchButtons(document);
   });
 
   document.body.addEventListener("htmx:beforeRequest", function (evt) {

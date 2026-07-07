@@ -34,8 +34,29 @@
 </div>
 
 <div class="card">
-  <h3>MTTx</h3>
-  <p class="muted">MTTD {{.MTTx.MTTD}} · MTTA {{.MTTx.MTTA}} · MTTM {{.MTTx.MTTM}} · MTTR {{.MTTx.MTTR}}</p>
+  <h3>MTTx <span class="muted" style="font-weight:normal;">&middot; last {{.MTTxTrendDays}} days</span></h3>
+  <div class="grid-2" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
+    <div>
+      <p class="muted" style="margin-bottom:0.2rem;">Mean time to detect</p>
+      <strong style="font-size:1.1rem;">{{.MTTx.MTTD}}</strong>
+      {{.MTTDTrend}}
+    </div>
+    <div>
+      <p class="muted" style="margin-bottom:0.2rem;">Mean time to acknowledge</p>
+      <strong style="font-size:1.1rem;">{{.MTTx.MTTA}}</strong>
+      {{.MTTATrend}}
+    </div>
+    <div>
+      <p class="muted" style="margin-bottom:0.2rem;">Mean time to mitigate</p>
+      <strong style="font-size:1.1rem;">{{.MTTx.MTTM}}</strong>
+      {{.MTTMTrend}}
+    </div>
+    <div>
+      <p class="muted" style="margin-bottom:0.2rem;">Mean time to resolve</p>
+      <strong style="font-size:1.1rem;">{{.MTTx.MTTR}}</strong>
+      {{.MTTRTrend}}
+    </div>
+  </div>
 </div>
 {{template "footer" .}}
 {{end}}

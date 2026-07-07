@@ -9,12 +9,12 @@ import (
 )
 
 type loginPageData struct {
-	Title string
+	baseData
 	Error string
 }
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
-	s.render.Render(w, "login", loginPageData{Title: "Log in"})
+	s.render.Render(w, "login", loginPageData{baseData: s.base(r, "Log in")})
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +28,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.users.GetByUsername(username)
 	if err != nil || !auth.CheckPassword(u.PasswordHash, password) {
-		s.render.Render(w, "login", loginPageData{Title: "Log in", Error: "Invalid organization, username, or password"})
+		s.render.Render(w, "login", loginPageData{baseData: s.base(r, "Log in"), Error: "Invalid organization, username, or password"})
 		return
 	}
 
@@ -38,12 +38,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if u.Role == models.RoleCustomer {
 		org, err := s.orgs.GetByName(orgName)
 		if err != nil {
-			s.render.Render(w, "login", loginPageData{Title: "Log in", Error: "Invalid organization, username, or password"})
+			s.render.Render(w, "login", loginPageData{baseData: s.base(r, "Log in"), Error: "Invalid organization, username, or password"})
 			return
 		}
 		member, err := s.orgMembers.IsMember(org.ID, u.ID)
 		if err != nil || !member {
-			s.render.Render(w, "login", loginPageData{Title: "Log in", Error: "Invalid organization, username, or password"})
+			s.render.Render(w, "login", loginPageData{baseData: s.base(r, "Log in"), Error: "Invalid organization, username, or password"})
 			return
 		}
 		orgID = org.ID
