@@ -21,14 +21,14 @@ func TestQueueSLA_ConfigurableAndAppliedAtTicketCreation(t *testing.T) {
 	qadmin := env.client()
 	qadmin.mustLogin("", "qadmin", "pass123")
 
-	// A bare SystemAdmin must not be able to set SLA targets either (same
-	// CapQueueOps gate as the rest of queue ownership).
+	// SystemAdmin holds CapQueueOps directly too (RELEASE/v_3.0.1.md:
+	// "SystemAdmin is the entire servicedesk") - no Sudo-as needed.
 	resp := admin.postFormNoRedirect("/queues/1/sla", url.Values{
 		"minutes_P1": {"30"}, "minutes_P2": {"120"}, "minutes_P3": {"600"}, "minutes_P4": {"2000"},
 	})
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("SystemAdmin set SLA: got %d, want 403", resp.StatusCode)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("SystemAdmin set SLA: got %d, want 303", resp.StatusCode)
 	}
 
 	qadmin.mustPost(t, "/queues/1/sla", url.Values{

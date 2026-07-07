@@ -75,10 +75,18 @@ var capabilityRoles = map[Capability]map[Role]bool{
 	CapAgentDetect: {RoleAgent: true},
 }
 
-// Can reports whether r exactly holds the given capability. Unlike AtLeast,
-// this is not monotonic in rank - SystemAdmin does not automatically pass
-// CapQueueOps just by outranking Manager (see DESIGN/02 §2.1.1).
+// Can reports whether r holds the given capability. SystemAdmin holds every
+// capability unconditionally - "SystemAdmin is the entire servicedesk," the
+// top of the hierarchy, with nothing requiring Sudo-as to reach (RELEASE/v_3.0.1.md).
+// This reverses the earlier DESIGN/02 §2.1.1 split where SystemAdmin didn't
+// automatically pass CapQueueOps just by outranking Manager; every other
+// role must still be listed explicitly in capabilityRoles, so this is not
+// otherwise monotonic with AtLeast - Manager holding CapQueueOps still
+// doesn't imply Engineer does, for example.
 func (r Role) Can(c Capability) bool {
+	if r == RoleSystemAdmin {
+		return true
+	}
 	return capabilityRoles[c][r]
 }
 

@@ -35,29 +35,24 @@ func TestAdminIndex_RequiresSystemAdmin(t *testing.T) {
 }
 
 // TestSudo_StartActAsAndStop covers the core Sudo-as mechanics (DESIGN/02
-// §2.5): the sudo'd session can do exactly what the target role could do,
-// every audit row attributes to the target with SudoByID recording the real
-// admin, and a bare (non-sudo'd) SystemAdmin still can't reach Manager-only
-// actions directly - the regression Phase 1 exists to prevent.
+// §2.5): the sudo'd session acts with the target's identity, every audit row
+// attributes to the target with SudoByID recording the real admin, and
+// stopping the session restores the real admin's own identity. Sudo-as no
+// longer exists to *grant* capabilities SystemAdmin lacks (RELEASE/v_3.0.1.md:
+// "SystemAdmin is the entire servicedesk" holds every capability directly)
+// - it's for acting *as a specific other human*, e.g. so an action's audit
+// trail and identity-scoped views (like the acting-as banner below) reflect
+// that person, not the admin covering for them.
 func TestSudo_StartActAsAndStop(t *testing.T) {
 	env := newTestEnv(t)
 	admin := env.client()
 	admin.mustLogin("", "admin", "admin123")
 	createUser(t, admin, "qadmin", "q@x.com", "pass123", "Manager") // id 3
 
-	// Bare SystemAdmin still can't touch queue ops directly.
-	resp := admin.postFormNoRedirect("/queues/1/sla", url.Values{
-		"minutes_P1": {"10"}, "minutes_P2": {"20"}, "minutes_P3": {"30"}, "minutes_P4": {"40"},
-	})
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("bare SystemAdmin set SLA: got %d, want 403", resp.StatusCode)
-	}
-
 	// Start sudo as qadmin (Manager).
 	admin.mustPost(t, "/admin/users/3/sudo/start", nil)
 
-	// The sudo'd session can now do what a Manager can do.
+	// The sudo'd session acts as qadmin.
 	admin.mustPost(t, "/queues/1/sla", url.Values{
 		"minutes_P1": {"10"}, "minutes_P2": {"20"}, "minutes_P3": {"30"}, "minutes_P4": {"40"},
 	})
@@ -70,7 +65,7 @@ func TestSudo_StartActAsAndStop(t *testing.T) {
 
 	// Stop the session and confirm it's restored: GET /admin (SystemAdmin-only) works again.
 	admin.mustPost(t, "/admin/sudo/stop", nil)
-	resp = admin.get("/admin")
+	resp := admin.get("/admin")
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("after sudo stop, admin GET /admin: got %d, want 200 (identity restored)", resp.StatusCode)

@@ -49,7 +49,7 @@ MTTD/MTTA/MTTM/MTTR are simple deltas between consecutive stage timestamps (Dete
 
 ## 3.2 Queues & Assignment
 
-See [02_design_roles_and_tenancy.md](02_design_roles_and_tenancy.md) §2.2 for the full pickup/assign/transfer rules. Summary: Engineers pick up (self-assign) from queues they belong to; Manager (or SystemAdmin via Sudo-as, §2.5) assign/transfer to anyone.
+See [02_design_roles_and_tenancy.md](02_design_roles_and_tenancy.md) §2.2 for the full pickup/assign/transfer rules. Summary: Engineers pick up (self-assign) from queues they belong to; Manager or SystemAdmin (holds `CapQueueOps` directly, §2.1.1) assign/transfer to anyone.
 
 ## 3.3 Notes (Internal vs. External)
 

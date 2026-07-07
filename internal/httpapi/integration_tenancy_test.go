@@ -63,15 +63,6 @@ func TestQueueMembership_GatesPickupAndAssignIsManagerOnly(t *testing.T) {
 		"title": {"Router flaky"}, "description": {"d"}, "queue_id": {"1"}, "priority": {"P2"}, "category": {"net"},
 	})
 
-	// Queue CRUD/membership requires CapQueueOps (Manager only) - SystemAdmin
-	// no longer holds it natively (DESIGN/02 §2.1.1), so a bare admin request
-	// must 403 here, and queue membership setup below goes through qadmin.
-	resp := admin.postFormNoRedirect("/queues/1/members", url.Values{"user_id": {"3"}})
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("SystemAdmin queue-member add without sudo: got %d, want 403", resp.StatusCode)
-	}
-
 	qadmin := env.client()
 	qadmin.mustLogin("", "qadmin", "pass123")
 
@@ -79,20 +70,23 @@ func TestQueueMembership_GatesPickupAndAssignIsManagerOnly(t *testing.T) {
 	eng.mustLogin("", "eng1", "pass123")
 
 	// Not yet a queue member: pickup is forbidden.
-	resp = eng.postFormNoRedirect("/tickets/1/pickup", nil)
+	resp := eng.postFormNoRedirect("/tickets/1/pickup", nil)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("pickup without queue membership: got %d, want 400", resp.StatusCode)
 	}
 
-	qadmin.mustPost(t, "/queues/1/members", url.Values{"user_id": {"3"}})
+	// SystemAdmin holds CapQueueOps directly too (RELEASE/v_3.0.1.md:
+	// "SystemAdmin is the entire servicedesk") - no Sudo-as needed to manage
+	// queue membership.
+	admin.mustPost(t, "/queues/1/members", url.Values{"user_id": {"3"}})
 	resp = eng.postForm("/tickets/1/pickup", nil)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("pickup with queue membership: got %d", resp.StatusCode)
 	}
 
-	// Engineer cannot assign/transfer to someone else - only Manager can.
+	// Engineer cannot assign/transfer to someone else - only Manager (or SystemAdmin) can.
 	resp = eng.postFormNoRedirect("/tickets/1/assign", url.Values{"assignee_id": {"3"}})
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {

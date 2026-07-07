@@ -30,16 +30,19 @@
   {{else}}<p class="muted">No audit events yet.</p>{{end}}
 </div>
 
-<div class="actions">
-  <a class="btn secondary" href="/admin/orgs">&#9881; Org settings</a>
-  <a class="btn secondary" href="/admin/webhooks">&#128274; Integrations</a>
-  <a class="btn secondary" href="/admin/audit">&#128203; Audit</a>
+<div class="card">
+  <h3>System configuration</h3>
+  <div class="actions" style="flex-wrap:wrap;">
+    <a class="btn secondary" href="/admin/orgs">&#9881; Org settings</a>
+    <a class="btn secondary" href="/admin/custom-fields">&#128221; Custom Fields</a>
+    <a class="btn secondary" href="/admin/services">&#128268; Service Catalog</a>
+    <a class="btn secondary" href="/admin/webhooks">&#128274; Integrations (Webhooks)</a>
+    <a class="btn secondary" href="/admin/workflows">&#9881; Workflows &amp; Runbooks</a>
+    <a class="btn secondary" href="/admin/audit">&#128203; Audit</a>
+  </div>
+  <p class="muted" style="margin-top:0.6rem;">
+    Queue/SLA/Engineer-membership editing is Manager-owned (<a href="/queues">Queues</a> &mdash; use "Sudo as" above on a Manager account to edit). Also: <a href="/metrics">Prometheus metrics</a>.
+  </p>
 </div>
-<p class="muted" style="margin-top:0.5rem;">
-  Also: <a href="/admin/workflows">Workflows &amp; Runbooks</a> &middot;
-  <a href="/admin/custom-fields">Custom Fields</a> &middot;
-  <a href="/admin/services">Service Catalog</a> &middot;
-  <a href="/metrics">Prometheus metrics</a>
-</p>
 {{template "footer" .}}
 {{end}}

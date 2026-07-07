@@ -2,10 +2,10 @@ package models
 
 import "testing"
 
-// TestRole_CanQueueOps verifies the DESIGN/02 §2.1.1 capability model: Manager
-// holds CapQueueOps natively, but SystemAdmin does NOT get it just by
-// outranking Manager via AtLeast - that's the whole point of splitting queue
-// ownership into an exact-membership capability instead of a rank check.
+// TestRole_CanQueueOps verifies the capability model: Manager holds
+// CapQueueOps natively, and SystemAdmin holds it too - "SystemAdmin is the
+// entire servicedesk" (RELEASE/v_3.0.1.md, reversing the earlier DESIGN/02
+// §2.1.1 split) - but no other role does just by outranking Manager via AtLeast.
 func TestRole_CanQueueOps(t *testing.T) {
 	cases := []struct {
 		role Role
@@ -14,7 +14,7 @@ func TestRole_CanQueueOps(t *testing.T) {
 		{RoleCustomer, false},
 		{RoleEngineer, false},
 		{RoleManager, true},
-		{RoleSystemAdmin, false},
+		{RoleSystemAdmin, true},
 		{RoleAgent, false},
 	}
 	for _, c := range cases {
@@ -37,13 +37,17 @@ func TestRole_CanSudoAndUserAdmin(t *testing.T) {
 	}
 }
 
-// TestRole_CanAgentDetect verifies only RoleAgent may backdate
-// Ticket.DetectedAt (DESIGN/03 §3.1.2b) - anyone else doing so would corrupt MTTD.
+// TestRole_CanAgentDetect verifies RoleAgent may backdate Ticket.DetectedAt
+// (DESIGN/03 §3.1.2b) - anyone else doing so would corrupt MTTD - except
+// SystemAdmin, which holds every capability unconditionally (RELEASE/v_3.0.1.md).
 func TestRole_CanAgentDetect(t *testing.T) {
 	if !RoleAgent.Can(CapAgentDetect) {
 		t.Error("Agent.Can(CapAgentDetect) = false, want true")
 	}
-	for _, r := range []Role{RoleCustomer, RoleEngineer, RoleManager, RoleSystemAdmin} {
+	if !RoleSystemAdmin.Can(CapAgentDetect) {
+		t.Error("SystemAdmin.Can(CapAgentDetect) = false, want true")
+	}
+	for _, r := range []Role{RoleCustomer, RoleEngineer, RoleManager} {
 		if r.Can(CapAgentDetect) {
 			t.Errorf("%s.Can(CapAgentDetect) = true, want false", r)
 		}
