@@ -22,6 +22,18 @@ Closed → (Reopen) → In Progress (SystemAdmin or the original Customer creato
 
 Every transition logs the actor, timestamp, action, and optional reason to `event_logs` (audit trail / event sourcing). Invalid transitions are rejected by the engine before any write happens.
 
+### 3.1.2b Stage Tracking Overlay (MTTD/MTTA/MTTM/MTTR)
+
+Alongside the operational status above, every ticket also tracks four stage timestamps purely for display and metrics — a Detect → Ack → Mitigate → Resolve view of the same ticket. This is **additive**, not a second state machine: it never gates or replaces a status transition, and `Rejected` sits outside it entirely (a rejected ticket just shows its plain status badge, no progress bar).
+
+- `DetectedAt` — defaults to the ticket's `CreatedAt`; for Agent-created tickets (an automation/monitoring actor filing on a human's behalf) it can be set earlier, to when the underlying trigger fired, so `MTTD = CreatedAt - DetectedAt` is near-zero for a Customer-filed ticket but meaningful for an Agent-filed one.
+- `AckedAt` — stamped once, the first time a ticket leaves `New` (first pickup/assign). Never overwritten.
+- `MitigatedAt` — stamped by a new lightweight action, `mark_mitigated` (Engineer or Agent, while `In Progress`), that does **not** change `Status` — it only marks that a workaround is in place. Overwritten if mitigated again after a reopen.
+- `ResolvedAt` — stamped when the existing `resolve` action fires. Cleared on `reopen` (the ticket is back in flight) and re-stamped if resolved again.
+- `ReopenCount` — incremented each time `reopen` fires. On reopen, the progress bar visually resets to whichever of `AckedAt`/`MitigatedAt` is the latest non-nil milestone, tagged "↺ reopened, Nth time".
+
+MTTD/MTTA/MTTM/MTTR are simple deltas between consecutive stage timestamps (Detect→Ack, Ack→Mitigate, Mitigate→Resolve), aggregable per-queue and per-shift straight from these columns — no new event-sourcing system needed, `event_logs` already timestamps every transition and gains one new event kind (`ticket_mitigated`) for the new action. See [08_design_ux.md](08_design_ux.md) §8.2 for the shared Ticket Progress Bar component this data drives.
+
 ### 3.1.3 Label System (Incident + RCA)
 
 - **Incident Labels**: free-form tags (`database`, `network`, `password-reset`). Multiple per ticket.
@@ -37,12 +49,12 @@ Every transition logs the actor, timestamp, action, and optional reason to `even
 
 ## 3.2 Queues & Assignment
 
-See [02_design_roles_and_tenancy.md](02_design_roles_and_tenancy.md) §2.2 for the full pickup/assign/transfer rules. Summary: Engineers pick up (self-assign) from queues they belong to; QueueAdmin+ assign/transfer to anyone.
+See [02_design_roles_and_tenancy.md](02_design_roles_and_tenancy.md) §2.2 for the full pickup/assign/transfer rules. Summary: Engineers pick up (self-assign) from queues they belong to; Manager (or SystemAdmin via Sudo-as, §2.5) assign/transfer to anyone.
 
 ## 3.3 Notes (Internal vs. External)
 
 - **External Notes**: visible to the Customer.
-- **Internal Notes**: Engineers/QueueAdmin/SystemAdmin only.
+- **Internal Notes**: Engineers/Manager/SystemAdmin only.
 - Both support Markdown (via `goldmark`, GFM extensions) including fenced code blocks; syntax highlighting is applied client-side with highlight.js.
 - Adding a note fires an SSE push, a webhook event (`note.added.external` / `note.added.internal`), and the `note_added` workflow trigger.
 
@@ -56,7 +68,7 @@ See [02_design_roles_and_tenancy.md](02_design_roles_and_tenancy.md) §2.2 for t
 
 - **Triggers**: `ticket_created`, `status_changed`, `field_updated`, `note_added`, or a manual "start runbook" button on a ticket.
 - **Step types** (one interpreter handles both plain rule workflows and Runbooks — see 04): `condition`, `user_input`, `http_request`, `template_render`, `add_note`, `auto_assign`, `webhook`, `approval`, `notify`.
-- **Approvals**: a step can require a named role (e.g. `QueueAdmin`) to approve/reject before the workflow continues; rejection stops the workflow rather than continuing.
+- **Approvals**: a step can require a named role (e.g. `Manager`) to approve/reject before the workflow continues; rejection stops the workflow rather than continuing.
 - **Implementation**: `workflow.Engine` + a background worker pool (goroutines), polling a `workflow_tasks` table used as a durable queue (`ClaimNext` claims the oldest due row inside a transaction).
 - Definitions are stored as JSON in `workflows.config` and edited via `/admin/workflows`.
 

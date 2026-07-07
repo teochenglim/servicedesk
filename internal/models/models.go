@@ -11,42 +11,100 @@ type Role string
 const (
 	RoleCustomer    Role = "Customer"
 	RoleEngineer    Role = "Engineer"
-	RoleQueueAdmin  Role = "QueueAdmin"
+	RoleManager     Role = "Manager" // renamed from QueueAdmin (DESIGN/02 §2.1.1)
 	RoleSystemAdmin Role = "SystemAdmin"
+	// RoleAgent is the non-human automation/monitoring actor (DESIGN/08 §8.1) -
+	// a real User row (not synthetic), so it reuses all existing ActorID/
+	// CreatorID/AuthorID attribution. Authenticates via a long-lived API token
+	// (see auth.IssueAPIToken), not the human JWT+cookie login flow.
+	RoleAgent Role = "Agent"
 )
 
+// IsAgent is a legacy name predating the RoleAgent persona above - despite
+// the naming collision, it means "is internal staff" (can see internal notes,
+// pick up tickets, etc.), not "is the automation Agent." RoleAgent is
+// deliberately included here since it shares that staff-level surface.
 func (r Role) IsAgent() bool {
 	switch r {
-	case RoleEngineer, RoleQueueAdmin, RoleSystemAdmin:
+	case RoleEngineer, RoleManager, RoleSystemAdmin, RoleAgent:
 		return true
 	}
 	return false
 }
 
+// AtLeast ranks roles for genuinely hierarchical checks only (e.g. "must be
+// staff to add an internal note"). It is NOT used to gate queue ownership -
+// see Capability/Can below and DESIGN/02 §2.1.1 for why a linear rank can't
+// safely express "SystemAdmin outranks Manager but doesn't inherit Manager's
+// queue-ops capability." RoleAgent sits at the same rank as Engineer, sharing
+// its baseline staff surface (DESIGN/08 §8.1: "same API and state machine as
+// everyone else").
 func (r Role) AtLeast(min Role) bool {
 	rank := map[Role]int{
 		RoleCustomer:    0,
 		RoleEngineer:    1,
-		RoleQueueAdmin:  2,
+		RoleAgent:       1,
+		RoleManager:     2,
 		RoleSystemAdmin: 3,
 	}
 	return rank[r] >= rank[min]
 }
 
+// Capability gates actions that don't follow the linear role rank - a role
+// either has one or it doesn't, regardless of where it sits in AtLeast's
+// ordering. See DESIGN/02 §2.1.1/§2.5.
+type Capability string
+
+const (
+	// CapQueueOps: queue CRUD, per-queue SLA targets, cross-queue assign/transfer.
+	CapQueueOps Capability = "queue_ops"
+	// CapSudo: start/stop a Sudo-as session (net-new, DESIGN/02 §2.5).
+	CapSudo Capability = "sudo"
+	// CapUserAdmin: create/edit/deactivate users, role changes.
+	CapUserAdmin Capability = "user_admin"
+	// CapAgentDetect: backdate Ticket.DetectedAt to an earlier monitoring
+	// trigger time at creation (DESIGN/03 §3.1.2b) - an ordinary Customer or
+	// Engineer backdating this would corrupt the MTTD metric.
+	CapAgentDetect Capability = "agent_detect"
+)
+
+var capabilityRoles = map[Capability]map[Role]bool{
+	CapQueueOps:    {RoleManager: true},
+	CapSudo:        {RoleSystemAdmin: true},
+	CapUserAdmin:   {RoleSystemAdmin: true},
+	CapAgentDetect: {RoleAgent: true},
+}
+
+// Can reports whether r exactly holds the given capability. Unlike AtLeast,
+// this is not monotonic in rank - SystemAdmin does not automatically pass
+// CapQueueOps just by outranking Manager (see DESIGN/02 §2.1.1).
+func (r Role) Can(c Capability) bool {
+	return capabilityRoles[c][r]
+}
+
 type User struct {
-	ID           int64     `gorm:"primaryKey" json:"id"`
-	Username     string    `gorm:"uniqueIndex;size:190;not null" json:"username"`
-	Email        string    `gorm:"not null;default:''" json:"email"`
-	PasswordHash string    `gorm:"not null;default:''" json:"-"`
-	Role         Role      `gorm:"not null" json:"role"`
-	Source       string    `gorm:"not null;default:db" json:"source"` // db | static | ldap
+	ID           int64  `gorm:"primaryKey" json:"id"`
+	Username     string `gorm:"uniqueIndex;size:190;not null" json:"username"`
+	Email        string `gorm:"not null;default:''" json:"email"`
+	PasswordHash string `gorm:"not null;default:''" json:"-"`
+	Role         Role   `gorm:"not null" json:"role"`
+	Source       string `gorm:"not null;default:db" json:"source"` // db | static | ldap
+	// API token auth (currently only used by RoleAgent - DESIGN/08 §8.1):
+	// a static long-lived token, split into an indexed public ID and a hashed
+	// secret so lookup doesn't require iterating every user. This is
+	// deliberately a narrow, swappable seam - see auth.IssueAPIToken - not a
+	// general auth framework, so a future OIDC/external-IdP login for Agent
+	// can replace it without touching anything else (same extension-point
+	// pattern as the documented-but-unwired LDAP_ENABLED config today).
+	APITokenID   *string   `gorm:"uniqueIndex;size:32" json:"-"`
+	APITokenHash *string   `gorm:"size:64" json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Organization is the multi-tenant boundary: Customers log in with an org
 // name plus username/password and only see tickets scoped to their org (own
 // tickets, plus tickets they've been added to watch within that org).
-// Engineer/QueueAdmin/SystemAdmin are not org-scoped - they see everything.
+// Engineer/Manager/SystemAdmin are not org-scoped - they see everything.
 //
 // ParentID makes this self-referencing (like Queue) so today's flat list of
 // orgs can grow into Group -> Company -> Department without a schema rename:
@@ -76,7 +134,7 @@ type Queue struct {
 
 // QueueMembership is which Engineers belong to which queue (e.g. an
 // "Engineers" or "Networking" queue) - pickup/assign is restricted to
-// members of a ticket's queue (QueueAdmin/SystemAdmin bypass this).
+// members of a ticket's queue (Manager, or SystemAdmin via Sudo-as, bypass this).
 type QueueMembership struct {
 	QueueID int64 `gorm:"primaryKey" json:"queue_id"`
 	UserID  int64 `gorm:"primaryKey" json:"user_id"`
@@ -119,8 +177,19 @@ type Ticket struct {
 	OrgID        int64      `gorm:"not null;default:0;index" json:"org_id"`
 	CustomFields string     `gorm:"not null;default:'{}'" json:"custom_fields"` // JSON blob
 	SLADueAt     *time.Time `json:"sla_due_at"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+
+	// Stage-tracking overlay (DESIGN/03 §3.1.2b): Detect -> Ack -> Mitigate ->
+	// Resolve, driving the shared Ticket Progress Bar (DESIGN/08 §8.2). This
+	// is purely additive display/metrics data - it never gates or replaces a
+	// Status transition above, and Rejected sits outside it entirely.
+	DetectedAt  *time.Time `json:"detected_at"`  // defaults to CreatedAt; Agent can backdate (CapAgentDetect)
+	AckedAt     *time.Time `json:"acked_at"`     // stamped once on first pickup/assign, never overwritten
+	MitigatedAt *time.Time `json:"mitigated_at"` // stamped by MarkMitigated; overwritten if mitigated again after a reopen
+	ResolvedAt  *time.Time `json:"resolved_at"`  // stamped on resolve; cleared on reopen, re-stamped if resolved again
+	ReopenCount int        `gorm:"not null;default:0" json:"reopen_count"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type CustomFieldDef struct {
@@ -151,6 +220,44 @@ type Note struct {
 	Body      string    `gorm:"not null" json:"body"`
 	Internal  bool      `gorm:"not null;default:false" json:"internal"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// Attachment (DESIGN/08 §8.7): file uploads on a ticket or a specific note.
+// TicketID is always set (denormalized, even when NoteID is too) so "all
+// attachments for this ticket" is a single indexed query, not a join through
+// notes. NoteID nil means a ticket-level attachment (e.g. the submission
+// form); non-nil means it belongs to that specific note and Internal is
+// inherited from it - an attachment on an internal note must never reach the
+// Customer view.
+//
+// Visibility has one more wrinkle beyond Internal: a Customer-uploaded
+// attachment is private to that uploader among other Customers, even ones
+// who can otherwise see the same ticket (e.g. a same-org coworker added as a
+// watcher) - CustomerPrivate + UploaderID encode that. Staff (Engineer/
+// Manager/SystemAdmin/Agent) always see every attachment regardless of who
+// uploaded it; a staff-uploaded attachment on an external note is visible to
+// any Customer who can see the ticket, same as before. See
+// service.AttachmentService.CanView for the single place this is decided.
+type Attachment struct {
+	ID         int64  `gorm:"primaryKey" json:"id"`
+	TicketID   int64  `gorm:"not null;index" json:"ticket_id"`
+	NoteID     *int64 `gorm:"index" json:"note_id"`
+	UploaderID int64  `gorm:"not null" json:"uploader_id"`
+	Filename   string `gorm:"not null" json:"filename"`
+	MIMEType   string `gorm:"not null" json:"mime_type"`
+	SizeBytes  int64  `gorm:"not null" json:"size_bytes"`
+	Internal   bool   `gorm:"not null;default:false" json:"internal"`
+	// CustomerPrivate is set at upload time from whether the uploader was a
+	// Customer - true means only UploaderID may view it among Customer
+	// viewers (staff are unaffected by this flag, they always see it).
+	CustomerPrivate bool `gorm:"not null;default:false" json:"customer_private"`
+	// StorageBackend is a discriminator for where Data actually lives - "db"
+	// today (the bytes are this row's Data column); a future backend value
+	// (e.g. "rustfs"/"s3") would mean Data is nil and the bytes live
+	// elsewhere, without needing a schema change to introduce it.
+	StorageBackend string    `gorm:"not null;default:db;size:16" json:"storage_backend"`
+	Data           []byte    `json:"-"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type Watcher struct {

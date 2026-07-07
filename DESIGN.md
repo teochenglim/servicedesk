@@ -9,6 +9,7 @@ The full design doc has been split into `DESIGN/` so each concern is easy to fin
 5. [DESIGN/05_design_non_functional_requirements.md](DESIGN/05_design_non_functional_requirements.md) — performance, security, observability, extensibility
 6. [DESIGN/06_design_technical_architecture.md](DESIGN/06_design_technical_architecture.md) — stack, database dialects, deployment topology
 7. [DESIGN/07_design_ui.md](DESIGN/07_design_ui.md) — Thoughtworks brand tokens, layout, and component design for the frontend
+8. [DESIGN/08_design_ux.md](DESIGN/08_design_ux.md) — persona-driven UX: per-role home screens, Ticket Progress Bar, AI/KB shared components
 
 Related docs:
 - [README.md](README.md) — how to run it

@@ -23,7 +23,7 @@ make demo
 # or: DEMO_MODE=true go run ./cmd/servicedesk
 ```
 
-Seeds 3 orgs, 2 queues, engineers/customers, ~15 tickets, a Problem, and a Runbook on first boot (skipped if the DB already has data — safe to restart). Logins: `demo.admin`/`demo1234` (QueueAdmin), `demo.engineer1..4`/`demo1234`, `demo.customer1..6`/`demo1234`. A "DEMO MODE" badge appears in the top bar, with a "Reset demo data" button for SystemAdmins. See [RELEASE/v_1.0.8.md](RELEASE/v_1.0.8.md).
+Seeds 3 orgs, 2 queues, engineers/customers, ~15 tickets, a Problem, and a Runbook on first boot (skipped if the DB already has data — safe to restart). Logins: `demo.admin`/`demo1234` (Manager), `demo.engineer1..4`/`demo1234`, `demo.customer1..6`/`demo1234`. A "DEMO MODE" badge appears in the top bar, with a "Reset demo data" button for SystemAdmins. See [RELEASE/v_1.0.8.md](RELEASE/v_1.0.8.md).
 
 ### Option 3 — Docker Compose
 
@@ -47,7 +47,7 @@ Defaults to PostgreSQL (see [DESIGN/06_design_technical_architecture.md](DESIGN/
 
 ## Logging in
 
-- **Internal staff** (Engineer / QueueAdmin / SystemAdmin): leave the "Organization" field blank.
+- **Internal staff** (Engineer / Manager / SystemAdmin): leave the "Organization" field blank.
 - **Customers**: multi-tenant — supply the organization name your account belongs to, alongside username/password. An admin assigns customers to organizations under `/admin/orgs`.
 
 ## Configuration
@@ -73,6 +73,7 @@ SERVICEDESK_CONFIG_FILE=config.yaml go run ./cmd/servicedesk
 | `DEMO_MODE` (or `-demo`) | `false` | Seed demo orgs/queues/users/tickets on boot if the DB is empty. See [RELEASE/v_1.0.8.md](RELEASE/v_1.0.8.md). |
 | `DEMO_RESET` (or `-demo-reset`) | `false` | With `DEMO_MODE`: wipe + reseed demo data on *every* boot, not just when empty. |
 | `SEED_DEMO_ONLY` (or `-seed-demo`) | `false` | Seed demo data against the configured DB and exit immediately, without starting the server. |
+| `SERVICEDESK_ATTACHMENT_MAX_SIZE_BYTES` | `10485760` (10MB) | Per-file upload cap. Attachments are stored as a DB blob column, not on local disk or an object store yet (see [DESIGN/08](DESIGN/08_design_ux.md) §8.7). |
 
 ## Development
 
@@ -89,7 +90,7 @@ The test suite (`internal/httpapi/integration_test.go`) drives the real HTTP ser
 
 - Ticket lifecycle with an explicit, enforced state machine (New → In Progress → Resolved → Closed, with Reject and Reopen rules).
 - Multi-tenant Customer support: org-scoped login, ticket visibility, and sharing via watch.
-- Queue-based routing: Engineers pick up from queues they belong to; QueueAdmins assign/transfer across any queue.
+- Queue-based routing: Engineers pick up from queues they belong to; Managers assign/transfer across any queue.
 - Markdown notes (internal/external) with syntax-highlighted code blocks.
 - Full-text search across tickets and notes (dialect-appropriate: SQLite FTS5 / MySQL FULLTEXT / Postgres tsvector).
 - Real-time updates via Server-Sent Events.

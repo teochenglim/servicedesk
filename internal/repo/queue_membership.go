@@ -8,7 +8,7 @@ import (
 
 // QueueMembershipRepo tracks which Engineers belong to which queue (e.g. an
 // "Engineers" or "Networking" queue). Pickup/assign is restricted to queue
-// members; QueueAdmin/SystemAdmin bypass this (see service.TicketService).
+// members; Manager (or SystemAdmin via Sudo-as) bypass this (see service.TicketService).
 type QueueMembershipRepo struct{ db *gorm.DB }
 
 func NewQueueMembershipRepo(db *gorm.DB) *QueueMembershipRepo { return &QueueMembershipRepo{db: db} }

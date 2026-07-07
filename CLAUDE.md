@@ -71,5 +71,6 @@ Do not run `make release`, `make tag`, or any git push/commit/tag command yourse
 - **`next_run_at` columns are Unix-epoch `int64`, not `time.Time`** — see [DESIGN/06](DESIGN/06_design_technical_architecture.md) §6.3. Don't "fix" this back to `time.Time`.
 - **String fields with `uniqueIndex` need an explicit `size:` tag** (MySQL can't index unsized `TEXT`).
 - **Queue membership vs. role**: "Tier 1/2/3" is not a role — it's which `Queue` an `Engineer` belongs to. Don't reintroduce tiered roles; use queue membership.
-- **Org (`OrgID`) scoping only applies to Customers.** Engineer/QueueAdmin/SystemAdmin are intentionally unscoped ("all for all") — don't add org filtering to staff-facing queries.
+- **Org (`OrgID`) scoping only applies to Customers.** Engineer/Manager/SystemAdmin are intentionally unscoped ("all for all") — don't add org filtering to staff-facing queries.
+- **Queue ownership (`CapQueueOps`) is a capability, not a role rank.** `Manager` holds it; `SystemAdmin` deliberately does not inherit it via `Role.AtLeast` — see [DESIGN/02](DESIGN/02_design_roles_and_tenancy.md) §2.1.1. Don't gate new queue/routing actions with `AtLeast`; use `Role.Can(models.CapQueueOps)`.
 - **`Engine.Resume` must not increment `StepIndex`.** Each step type's `runStep` case re-checks its own resume marker in the context and decides whether to advance — this is how a rejected `approval` step stops the workflow instead of silently continuing. See [DESIGN/04](DESIGN/04_design_runbook_hook.md) §4.3 before touching `internal/workflow/engine.go`.

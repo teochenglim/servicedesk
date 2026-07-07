@@ -7,23 +7,24 @@
 <div class="card">
   <div class="actions" style="justify-content:space-between;">
     <h3>{{.Name}} <span class="muted">(#{{.ID}})</span></h3>
-    {{if $.User.Role.AtLeast "QueueAdmin"}}
+    {{if $.User.CanQueueOps}}
     <form method="post" action="/queues/{{.ID}}/delete" onsubmit="return confirm('Delete queue?')"><button class="link-btn" type="submit">Delete queue</button></form>
     {{end}}
   </div>
   <p class="muted">Parent: {{if .ParentID}}{{.ParentID}}{{else}}-{{end}} · Default priority: {{.DefaultPriority}} · Default category: {{.DefaultCategory}}</p>
 
   <h4>Engineers in this queue</h4>
+  {{$queueID := .ID}}
   {{$members := index $.Members .ID}}
   {{range $members}}
   <span class="tag">{{.Username}}
-    {{if $.User.Role.AtLeast "QueueAdmin"}}
-    <form style="display:inline" method="post" action="/queues/{{$.ID}}/members/{{.ID}}/remove"><button class="link-btn" type="submit">&times;</button></form>
+    {{if $.User.CanQueueOps}}
+    <form style="display:inline" method="post" action="/queues/{{$queueID}}/members/{{.ID}}/remove"><button class="link-btn" type="submit">&times;</button></form>
     {{end}}
   </span>
   {{else}}<p class="muted">No engineers assigned yet, nobody can pick up tickets from this queue.</p>{{end}}
 
-  {{if $.User.Role.AtLeast "QueueAdmin"}}
+  {{if $.User.CanQueueOps}}
   <form method="post" action="/queues/{{.ID}}/members" style="margin-top:0.6rem;">
     <select name="user_id" style="width:auto; display:inline-block;">
       {{range $.AllUsers}}<option value="{{.ID}}">{{.Username}} ({{.Role}})</option>{{end}}
@@ -34,7 +35,7 @@
 </div>
 {{end}}
 
-{{if .User.Role.AtLeast "QueueAdmin"}}
+{{if .User.CanQueueOps}}
 <div class="card">
   <h3>New queue</h3>
   <form class="stacked" method="post" action="/queues">

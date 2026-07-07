@@ -2,7 +2,7 @@
 {{template "header" .}}
 <h1>Organizations</h1>
 <p class="muted">Multi-tenant boundary: Customers log in with an organization name + username + password and only
-see tickets scoped to their organization. Engineers/QueueAdmins/SystemAdmins are not org-scoped.</p>
+see tickets scoped to their organization. Engineers/Managers/SystemAdmins are not org-scoped.</p>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 
 {{range .Orgs}}

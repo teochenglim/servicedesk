@@ -34,7 +34,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only Customers are org-scoped (multi-tenant); internal staff (Engineer/
-	// QueueAdmin/SystemAdmin) see across every org, so the org field is unused for them.
+	// Manager/SystemAdmin) see across every org, so the org field is unused for them.
 	var orgID int64
 	if u.Role == models.RoleCustomer {
 		org, err := s.orgs.GetByName(orgName)

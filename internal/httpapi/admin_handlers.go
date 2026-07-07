@@ -100,10 +100,14 @@ type usersData struct {
 	Users []models.User
 	Roles []models.Role
 	Error string
+	// NewAPIToken is the plaintext token shown exactly once, right after
+	// issuing it (see handleUserIssueAPIToken) - it is never persisted or
+	// retrievable again, only its hash is stored.
+	NewAPIToken string
 }
 
 var allRoles = []models.Role{
-	models.RoleCustomer, models.RoleEngineer, models.RoleQueueAdmin, models.RoleSystemAdmin,
+	models.RoleCustomer, models.RoleEngineer, models.RoleManager, models.RoleSystemAdmin, models.RoleAgent,
 }
 
 func (s *Server) handleUsersList(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +142,33 @@ func (s *Server) handleUserCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// handleUserIssueAPIToken (re)issues a long-lived API token for a user -
+// currently only meaningful for RoleAgent (DESIGN/08 §8.1). Issuing a new
+// token replaces any previous one. The plaintext token is rendered back into
+// the page exactly once; only its hash is ever persisted.
+func (s *Server) handleUserIssueAPIToken(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	token, tokenID, tokenHash, err := auth.IssueAPIToken()
+	if err != nil {
+		s.log.Error("users: issue api token failed", "user_id", id, "err", err)
+		http.Error(w, "could not issue token", http.StatusInternalServerError)
+		return
+	}
+	if err := s.users.SetAPIToken(id, tokenID, tokenHash); err != nil {
+		s.log.Error("users: save api token failed", "user_id", id, "err", err)
+		http.Error(w, "could not save token", http.StatusInternalServerError)
+		return
+	}
+	users, _ := s.users.List()
+	s.render.Render(w, "admin_users", usersData{
+		baseData: s.base(r, "Users"), Users: users, Roles: allRoles, NewAPIToken: token,
+	})
 }
 
 type customFieldsData struct {

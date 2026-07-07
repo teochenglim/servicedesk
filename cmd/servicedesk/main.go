@@ -59,6 +59,7 @@ func main() {
 	approvals := repo.NewApprovalRepo(gdb)
 	customFields := repo.NewCustomFieldRepo(gdb)
 	events := repo.NewEventLogRepo(gdb)
+	attachments := repo.NewAttachmentRepo(gdb)
 
 	if err := auth.Bootstrap(users, cfg, log); err != nil {
 		logging.Fatal(log, "startup: failed to bootstrap users", "err", err)
@@ -100,10 +101,11 @@ func main() {
 	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, log)
 	noteSvc := service.NewNoteService(notes, events, watchers, hub, whDispatcher, engine)
 	problemSvc := service.NewProblemService(problems, tags)
+	attachmentSvc := service.NewAttachmentService(attachments, notes, int64(cfg.AttachmentMaxSizeBytes))
 
 	server := httpapi.NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers, webhooks, workflows, workflowTasks,
-		approvals, customFields, events, ticketSvc, noteSvc, problemSvc, engine, hub,
+		approvals, customFields, events, ticketSvc, noteSvc, problemSvc, attachmentSvc, engine, hub,
 	)
 	server.SetDB(gdb)
 	server.SetDemoMode(cfg.DemoMode)

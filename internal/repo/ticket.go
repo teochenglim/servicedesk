@@ -43,7 +43,7 @@ type ListFilter struct {
 
 	// CustomerScope enforces multi-tenant visibility for the Customer role:
 	// only tickets in their org that they created or were added to watch.
-	// Engineer/QueueAdmin/SystemAdmin never set this - they see every org.
+	// Engineer/Manager/SystemAdmin never set this - they see every org.
 	CustomerScope *CustomerScope
 }
 

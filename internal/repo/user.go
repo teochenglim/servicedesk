@@ -49,3 +49,21 @@ func (r *UserRepo) UpsertStatic(username, passwordHash string, role models.Role)
 func (r *UserRepo) UpdateRole(id int64, role models.Role) error {
 	return r.db.Model(&models.User{}).Where("id = ?", id).Update("role", role).Error
 }
+
+// GetByAPITokenID looks up the user owning an API token by its public,
+// indexed token ID (see auth.IssueAPIToken) - the caller still must verify
+// the accompanying secret against APITokenHash before trusting this.
+func (r *UserRepo) GetByAPITokenID(tokenID string) (*models.User, error) {
+	var u models.User
+	if err := r.db.Where("api_token_id = ?", tokenID).First(&u).Error; err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// SetAPIToken stores a newly issued token's public ID and hashed secret,
+// replacing any previous token for this user (issuing a new one revokes the old).
+func (r *UserRepo) SetAPIToken(userID int64, tokenID, tokenHash string) error {
+	return r.db.Model(&models.User{}).Where("id = ?", userID).
+		Updates(map[string]any{"api_token_id": tokenID, "api_token_hash": tokenHash}).Error
+}

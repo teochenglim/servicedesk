@@ -7,8 +7,8 @@
   <label for="title">Title</label>
   <input id="title" type="text" name="title" required>
 
-  <label for="description">Description (Markdown supported)</label>
-  <textarea id="description" name="description"></textarea>
+  <label for="description">Description</label>
+  {{template "markdown_editor" (dict "Name" "description" "Value" "" "ID" "description")}}
 
   <label for="queue_id">Queue</label>
   <select id="queue_id" name="queue_id" required>

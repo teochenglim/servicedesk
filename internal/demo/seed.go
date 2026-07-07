@@ -187,12 +187,12 @@ func createQueues(tx *gorm.DB) ([]models.Queue, error) {
 }
 
 type seededUsers struct {
-	QueueAdmin models.User
-	Engineers  []models.User
-	Customers  []models.User
+	Manager   models.User
+	Engineers []models.User
+	Customers []models.User
 }
 
-// createUsers makes 1 QueueAdmin, 4 Engineers (split 2/2 across the 2 demo
+// createUsers makes 1 Manager, 4 Engineers (split 2/2 across the 2 demo
 // queues), and 6 Customers (split 2/2/2 across the 3 demo orgs).
 func createUsers(tx *gorm.DB, orgs []models.Organization, queues []models.Queue) (seededUsers, error) {
 	hash, err := auth.HashPassword(demoPassword)
@@ -202,7 +202,7 @@ func createUsers(tx *gorm.DB, orgs []models.Organization, queues []models.Queue)
 
 	qadmin := models.User{
 		Username: usernamePrefix + "admin", Email: "demo.admin@example.com",
-		PasswordHash: hash, Role: models.RoleQueueAdmin, Source: "demo",
+		PasswordHash: hash, Role: models.RoleManager, Source: "demo",
 	}
 	if err := tx.Create(&qadmin).Error; err != nil {
 		return seededUsers{}, err
@@ -240,7 +240,7 @@ func createUsers(tx *gorm.DB, orgs []models.Organization, queues []models.Queue)
 		}
 	}
 
-	return seededUsers{QueueAdmin: qadmin, Engineers: engineers, Customers: customers}, nil
+	return seededUsers{Manager: qadmin, Engineers: engineers, Customers: customers}, nil
 }
 
 // ticketSpec describes one seeded ticket. CustomerIdx/EngineerIdx/QueueIdx
@@ -285,16 +285,41 @@ func createTickets(tx *gorm.DB, orgs []models.Organization, queues []models.Queu
 		}
 		customer := users.Customers[sp.CustomerIdx]
 		org := orgs[sp.CustomerIdx/2]
+		detectedAt, ackedAt, mitigatedAt, resolvedAt := demoStageTimestamps(sp.Status, time.Now())
 		tickets[i] = models.Ticket{
 			Title: sp.Title, Description: sp.Description, Priority: sp.Priority, Status: sp.Status,
 			QueueID: queues[sp.QueueIdx].ID, Category: sp.Category, AssigneeID: assignee,
 			CreatorID: customer.ID, OrgID: org.ID, SLADueAt: slaDue(sp.SLA),
+			DetectedAt: detectedAt, AckedAt: ackedAt, MitigatedAt: mitigatedAt, ResolvedAt: resolvedAt,
 		}
 		if err := tx.Create(&tickets[i]).Error; err != nil {
 			return nil, err
 		}
 	}
 	return tickets, nil
+}
+
+// demoStageTimestamps fabricates plausible stage-tracking timestamps
+// (DESIGN/03 §3.1.2b) matching a seeded ticket's Status - demo tickets are
+// inserted directly with a final Status rather than replayed through
+// TicketService, so there's no event_logs history to derive these from
+// (see db.backfillStageTimestamps, which only has real history to work with
+// for genuinely-created tickets). Without this, every demo ticket would show
+// the progress bar stuck at "Detect" regardless of its actual status.
+func demoStageTimestamps(status models.TicketStatus, now time.Time) (detected, acked, mitigated, resolved *time.Time) {
+	d := now.Add(-24 * time.Hour)
+	detected = &d
+	switch status {
+	case models.StatusInProgress:
+		a := now.Add(-3 * time.Hour)
+		acked = &a
+	case models.StatusResolved, models.StatusClosed:
+		a := now.Add(-20 * time.Hour)
+		m := now.Add(-8 * time.Hour)
+		r := now.Add(-2 * time.Hour)
+		acked, mitigated, resolved = &a, &m, &r
+	}
+	return detected, acked, mitigated, resolved
 }
 
 func slaDue(bucket string) *time.Time {

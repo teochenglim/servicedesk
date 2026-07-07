@@ -1,0 +1,16 @@
+{{define "progress_bar"}}
+{{$bar := stageProgress .}}
+{{if $bar.Applicable}}
+<div class="stage-bar" data-current="{{$bar.CurrentIdx}}">
+  {{range $i, $name := $bar.Stages}}
+  <span class="stage-dot{{if eq $i $bar.CurrentIdx}} current{{end}}"><span class="dot"></span><span class="stage-name">{{$name}}</span></span>
+  {{if lt (add $i 1) (len $bar.Stages)}}<span class="stage-line"></span>{{end}}
+  {{end}}
+  {{if $bar.Closed}}<span class="stage-gate">&rarr; Closed &#10003;</span>{{end}}
+</div>
+<div class="stage-label">
+  {{$bar.StageLabel}}
+  {{if gt $bar.ReopenCount 0}}<span class="reopen-tag">&#8630; reopened, {{ordinal $bar.ReopenCount}} time</span>{{end}}
+</div>
+{{end}}
+{{end}}

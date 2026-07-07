@@ -1,0 +1,4 @@
+{{define "markdown_editor"}}
+<div class="md-editor-mount" id="md-editor-{{.ID}}" data-hidden-id="md-editor-input-{{.ID}}" data-height="{{if .Height}}{{.Height}}{{else}}220px{{end}}"></div>
+<textarea name="{{.Name}}" id="md-editor-input-{{.ID}}" style="display:none">{{.Value}}</textarea>
+{{end}}

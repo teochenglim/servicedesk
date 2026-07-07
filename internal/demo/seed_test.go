@@ -85,7 +85,7 @@ func TestSeed_CreatesExpectedCounts(t *testing.T) {
 
 	var userCount int64
 	gdb.Model(&models.User{}).Where("username LIKE ?", usernamePrefix+"%").Count(&userCount)
-	if userCount != 11 { // 1 QueueAdmin + 4 Engineers + 6 Customers
+	if userCount != 11 { // 1 Manager + 4 Engineers + 6 Customers
 		t.Errorf("demo users = %d, want 11", userCount)
 	}
 }

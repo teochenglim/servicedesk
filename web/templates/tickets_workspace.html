@@ -45,6 +45,7 @@
     <div class="subject">#{{.ID}} {{.Title}}</div>
     <div class="row-meta">{{.Status}} · Queue {{.QueueID}}</div>
     {{if .SLADueAt}}<span class="sla-chip {{slaState .SLADueAt}}">{{slaLabel .SLADueAt}}</span>{{end}}
+    {{template "progress_bar" .}}
   </a>
   {{else}}
   <p class="muted" style="padding:0 1rem;">No tickets found.</p>
@@ -61,6 +62,7 @@
     <h1>#{{.Ticket.ID}} {{.Ticket.Title}} <span id="live-badge" class="badge" data-status="New">live</span></h1>
     <span class="badge" data-status="{{.Ticket.Status}}">{{.Ticket.Status}}</span>
   </div>
+  {{template "progress_bar" .Ticket}}
   <button type="button" class="details-chip" x-data x-on:click="$dispatch('open-details')">Details</button>
 
   <div class="ticket-columns" x-data="{ detailsOpen: false }" x-on:open-details.window="detailsOpen = true">
@@ -75,6 +77,7 @@
             <form method="post" action="/tickets/{{.Ticket.ID}}/pickup"><button class="primary" type="submit">Pickup</button></form>
           {{end}}
           {{if eq .Ticket.Status "In Progress"}}
+            <form method="post" action="/tickets/{{.Ticket.ID}}/mitigate"><button class="secondary" type="submit">{{if .Ticket.MitigatedAt}}Update mitigation{{else}}Mark mitigated{{end}}</button></form>
             <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="resolve"><button class="primary" type="submit">Resolve</button></form>
             <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reject"><button class="danger" type="submit">Reject</button></form>
           {{end}}
@@ -92,6 +95,20 @@
             <form method="post" action="/tickets/{{.Ticket.ID}}/watch"><button class="secondary" type="submit">Watch</button></form>
           {{end}}
         </div>
+
+        {{range .Attachments}}{{if not .NoteID}}
+        <div class="attachment-item">
+          {{if isInlineable .MIMEType}}
+          <a href="/attachments/{{.ID}}" target="_blank"><img src="/attachments/{{.ID}}" alt="{{.Filename}}" class="attachment-thumb"></a>
+          {{else}}
+          <a href="/attachments/{{.ID}}" class="attachment-file">📎 {{.Filename}}</a>
+          {{end}}
+        </div>
+        {{end}}{{end}}
+        <form method="post" action="/tickets/{{.Ticket.ID}}/attachments" enctype="multipart/form-data" class="actions" style="margin-top:0.5rem;">
+          <input type="file" name="file" required>
+          <button class="secondary" type="submit">📎 Add attachment</button>
+        </form>
       </div>
 
       {{if .Approvals}}
@@ -171,7 +188,7 @@
             </div>
             <input type="hidden" name="internal" :value="mode === 'internal' ? 'on' : ''">
             {{end}}
-            <textarea name="body" placeholder="Write a note, Markdown supported." required></textarea>
+            {{template "markdown_editor" (dict "Name" "body" "Value" "" "ID" "note-body" "Height" "160px")}}
             <div class="actions"><button class="primary" type="submit">Send</button></div>
           </form>
         </div>
@@ -200,7 +217,7 @@
         {{end}}
       </div>
 
-      {{if .User.Role.AtLeast "QueueAdmin"}}
+      {{if .User.CanQueueOps}}
       <div class="card">
         <h3>Assign / Transfer</h3>
         <form class="stacked" method="post" action="/tickets/{{.Ticket.ID}}/assign">

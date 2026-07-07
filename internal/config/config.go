@@ -31,6 +31,12 @@ type Config struct {
 	DemoMode     bool // DEMO_MODE / -demo: seed demo data on boot if the DB is empty
 	DemoReset    bool // DEMO_RESET / -demo-reset: wipe + reseed demo data on every boot
 	SeedDemoOnly bool // SEED_DEMO_ONLY / -seed-demo: seed demo data and exit, no server
+
+	// AttachmentMaxSizeBytes caps a single upload (DESIGN/08 §8.7). Attachments
+	// are stored as a DB blob column for now (Attachment.Data), not on local
+	// disk or an object store - see DESIGN/08 for the future RustFS/S3 seam -
+	// so this also bounds how much a single row can grow.
+	AttachmentMaxSizeBytes int
 }
 
 // fileConfig mirrors Config with a friendlier YAML shape (nested db/smtp/worker
@@ -66,6 +72,8 @@ type fileConfig struct {
 
 	DemoMode  *bool `yaml:"demo_mode"`
 	DemoReset *bool `yaml:"demo_reset"`
+
+	AttachmentMaxSizeBytes *int `yaml:"attachment_max_size_bytes"`
 }
 
 // Load builds the process config from, in increasing priority: hardcoded
@@ -95,6 +103,8 @@ func Load() Config {
 		DemoMode:         flags.demoMode || getEnvBool("DEMO_MODE", fromBoolPtr(f.DemoMode, false)),
 		DemoReset:        flags.demoReset || getEnvBool("DEMO_RESET", fromBoolPtr(f.DemoReset, false)),
 		SeedDemoOnly:     flags.seedDemoOnly || getEnvBool("SEED_DEMO_ONLY", false),
+
+		AttachmentMaxSizeBytes: getEnvInt("SERVICEDESK_ATTACHMENT_MAX_SIZE_BYTES", fromIntPtr(f.AttachmentMaxSizeBytes, 10*1024*1024)),
 	}
 	if c.DemoReset {
 		c.DemoMode = true // -demo-reset/DEMO_RESET implies DemoMode
@@ -166,6 +176,13 @@ func fromPtr(p *string, fallback string) string {
 }
 
 func fromBoolPtr(p *bool, fallback bool) bool {
+	if p != nil {
+		return *p
+	}
+	return fallback
+}
+
+func fromIntPtr(p *int, fallback int) int {
 	if p != nil {
 		return *p
 	}

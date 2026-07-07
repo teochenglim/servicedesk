@@ -75,6 +75,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	approvals := repo.NewApprovalRepo(gdb)
 	customFields := repo.NewCustomFieldRepo(gdb)
 	events := repo.NewEventLogRepo(gdb)
+	attachments := repo.NewAttachmentRepo(gdb)
 
 	cfg := config.Config{StaticUsers: ""}
 	if err := auth.Bootstrap(users, cfg, log); err != nil {
@@ -90,11 +91,12 @@ func newTestEnv(t *testing.T) *testEnv {
 	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, log)
 	noteSvc := service.NewNoteService(notes, events, watchers, hub, whDispatcher, engine)
 	problemSvc := service.NewProblemService(problems, tags)
+	attachmentSvc := service.NewAttachmentService(attachments, notes, 10<<20)
 
 	srv := NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers,
 		webhooks, workflows, workflowTask, approvals, customFields, events,
-		ticketSvc, noteSvc, problemSvc, engine, hub,
+		ticketSvc, noteSvc, problemSvc, attachmentSvc, engine, hub,
 	)
 	srv.SetDB(gdb)
 

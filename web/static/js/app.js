@@ -1,7 +1,39 @@
+// initMarkdownEditors mounts a Toast UI Editor (DESIGN/08 §8.7/§8.11: every
+// text surface gets Markdown with a raw/rendered toggle - Toast UI's built-in
+// WYSIWYG<->Markdown mode switch is that toggle) onto every
+// ".md-editor-mount" under root that hasn't been initialized yet, syncing its
+// content into the paired hidden textarea just before the enclosing form
+// submits. Called on both initial page load and every htmx swap (mirroring
+// hljs.highlightAll's dual-hook pattern below), since ticket-detail swaps can
+// inject a fresh note composer without a full page reload.
+function initMarkdownEditors(root) {
+  root.querySelectorAll(".md-editor-mount:not([data-md-initialized])").forEach(function (mount) {
+    mount.dataset.mdInitialized = "1";
+    var hidden = document.getElementById(mount.dataset.hiddenId);
+    if (!hidden) return;
+    var editor = new toastui.Editor({
+      el: mount,
+      height: mount.dataset.height || "220px",
+      initialEditType: "wysiwyg",
+      previewStyle: "tab",
+      initialValue: hidden.value || "",
+      usageStatistics: false,
+    });
+    var form = mount.closest("form");
+    if (form) {
+      form.addEventListener("submit", function () {
+        hidden.value = editor.getMarkdown();
+      });
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   hljs.highlightAll();
+  initMarkdownEditors(document);
   document.body.addEventListener("htmx:afterSwap", function () {
     hljs.highlightAll();
+    initMarkdownEditors(document);
   });
 
   document.body.addEventListener("htmx:beforeRequest", function (evt) {

@@ -14,6 +14,14 @@ func (r *NoteRepo) Create(n *models.Note) error {
 	return r.db.Create(n).Error
 }
 
+func (r *NoteRepo) Get(id int64) (*models.Note, error) {
+	var n models.Note
+	if err := r.db.First(&n, id).Error; err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
 // ListByTicket returns notes for a ticket; includeInternal gates internal notes for Customer role.
 func (r *NoteRepo) ListByTicket(ticketID int64, includeInternal bool) ([]models.Note, error) {
 	q := r.db.Where("ticket_id = ?", ticketID)

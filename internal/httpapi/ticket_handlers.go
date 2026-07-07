@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"servicedesk/internal/auth"
 	"servicedesk/internal/middleware"
 	"servicedesk/internal/models"
 	"servicedesk/internal/repo"
@@ -20,9 +21,10 @@ type baseData struct {
 }
 
 type userView struct {
-	UserID   int64
-	Username string
-	Role     models.Role
+	UserID      int64
+	Username    string
+	Role        models.Role
+	CanQueueOps bool // Manager (or SystemAdmin via future Sudo-as) - see DESIGN/02 §2.1.1
 }
 
 func (s *Server) base(r *http.Request, title string) baseData {
@@ -30,7 +32,9 @@ func (s *Server) base(r *http.Request, title string) baseData {
 	if c == nil {
 		return baseData{Title: title, DemoMode: s.demoMode}
 	}
-	return baseData{Title: title, DemoMode: s.demoMode, User: &userView{UserID: c.UserID, Username: c.Username, Role: c.Role}}
+	return baseData{Title: title, DemoMode: s.demoMode, User: &userView{
+		UserID: c.UserID, Username: c.Username, Role: c.Role, CanQueueOps: c.Role.Can(models.CapQueueOps),
+	}}
 }
 
 type ticketsWorkspaceData struct {
@@ -54,6 +58,7 @@ type ticketsWorkspaceData struct {
 	Approvals    []models.Approval
 	UserNames    map[int64]string
 	UserRoles    map[int64]models.Role
+	Attachments  []models.Attachment
 }
 
 // loadTicketsList builds the ticket list query from request filters/view and
@@ -100,7 +105,7 @@ func (s *Server) loadTicketsList(r *http.Request) (tickets []models.Ticket, queu
 		f.QueueIDs = ids
 	}
 	// Customers are multi-tenant scoped: only tickets in their org that they
-	// created or were added to watch. Engineer/QueueAdmin/SystemAdmin see every org.
+	// created or were added to watch. Engineer/Manager/SystemAdmin see every org.
 	if claims.Role == models.RoleCustomer {
 		f.CustomerScope = &repo.CustomerScope{OrgID: claims.OrgID, UserID: claims.UserID}
 	}
@@ -163,6 +168,22 @@ type waitingForm struct {
 	Fields       []workflow.FieldDef
 }
 
+// customerCanSeeTicket applies the Customer visibility rule (DESIGN/02 §2.3):
+// unrestricted for staff; a Customer must have created the ticket or be
+// watching it, and it must be in their own org. Shared by every route that
+// takes a ticket (or an attachment's parent ticket) ID directly rather than
+// always routing through handleTicketDetail.
+func (s *Server) customerCanSeeTicket(claims *auth.Claims, t *models.Ticket) bool {
+	if claims.Role != models.RoleCustomer {
+		return true
+	}
+	if t.CreatorID == claims.UserID {
+		return true
+	}
+	watching, err := s.watchers.IsWatching(t.ID, claims.UserID)
+	return err == nil && watching && t.OrgID == claims.OrgID
+}
+
 func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.ClaimsFrom(r.Context())
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -175,14 +196,9 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if claims.Role == models.RoleCustomer && t.CreatorID != claims.UserID {
-		// Same-org tickets they've been added to watch are visible too
-		// (multi-tenant: "unless added by others within the same company").
-		watching, wErr := s.watchers.IsWatching(id, claims.UserID)
-		if wErr != nil || !watching || t.OrgID != claims.OrgID {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+	if !s.customerCanSeeTicket(claims, t) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
 	}
 
 	tickets, queues, f, view, err := s.loadTicketsList(r)
@@ -197,6 +213,10 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 	watching, _ := s.watchers.IsWatching(id, claims.UserID)
 	waiting, _ := s.workflowTask.ListWaitingForTicket(id)
 	approvals, _ := s.approvals.ListForTicket(id)
+	attachments, err := s.attachmentSvc.ListVisibleForTicket(claims, id)
+	if err != nil {
+		s.log.Warn("ticket detail: could not load attachments", "ticket_id", id, "err", err)
+	}
 
 	waitingForms := map[int64]waitingForm{}
 	for _, task := range waiting {
@@ -247,7 +267,7 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 		Tickets:  tickets, Queues: queues, Filter: f, View: view,
 		Ticket: t, Notes: notes, Events: events, Tags: tags, Agents: agents,
 		Watching: watching, Workflows: workflows, WaitingTasks: waiting, WaitingForms: waitingForms,
-		Approvals: approvals, UserNames: userNames, UserRoles: userRoles,
+		Approvals: approvals, UserNames: userNames, UserRoles: userRoles, Attachments: attachments,
 	})
 }
 
@@ -280,6 +300,24 @@ func (s *Server) handleTicketPickup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.ticketSvc.Pickup(claims, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	redirectToTicket(w, r, id)
+}
+
+// handleTicketMitigate marks the stage-tracking overlay's Mitigate milestone
+// (DESIGN/03 §3.1.2b) - does not change ticket Status, only stamps MitigatedAt
+// and optionally posts a note in the same call.
+func (s *Server) handleTicketMitigate(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFrom(r.Context())
+	id, err := ticketIDFromPath(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	_ = r.ParseForm()
+	if _, err := s.ticketSvc.MarkMitigated(claims, id, r.FormValue("note")); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

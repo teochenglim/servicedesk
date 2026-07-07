@@ -50,6 +50,33 @@ var (
 		Name: "servicedesk_sse_connected_clients",
 		Help: "Currently connected SSE clients.",
 	})
+
+	// Stage-tracking overlay metrics (DESIGN/03 §3.1.2b): durations between
+	// consecutive Detect/Ack/Mitigate/Resolve stage timestamps, observed at
+	// write-time in internal/service/ticket.go. Buckets favor ticket-lifecycle
+	// scale (minutes to a week) rather than DefBuckets' sub-second HTTP scale.
+	ticketStageBuckets = []float64{60, 300, 900, 1800, 3600, 14400, 28800, 86400, 259200, 604800}
+
+	MTTDSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "servicedesk_ticket_mttd_seconds",
+		Help:    "Mean time to detect: ticket creation minus the underlying trigger time (near-zero unless Agent-backdated).",
+		Buckets: ticketStageBuckets,
+	})
+	MTTASeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "servicedesk_ticket_mtta_seconds",
+		Help:    "Mean time to ack: Detect to first pickup/assign.",
+		Buckets: ticketStageBuckets,
+	})
+	MTTMSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "servicedesk_ticket_mttm_seconds",
+		Help:    "Mean time to mitigate: Ack to a workaround being marked in place.",
+		Buckets: ticketStageBuckets,
+	})
+	MTTRSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "servicedesk_ticket_mttr_seconds",
+		Help:    "Mean time to resolve: Mitigate to root cause fixed.",
+		Buckets: ticketStageBuckets,
+	})
 )
 
 // Middleware records request counts/latency labeled by route pattern (r.Pattern,

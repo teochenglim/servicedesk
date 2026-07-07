@@ -106,6 +106,22 @@ h3 { font-size: 1rem; }
 .sla-chip.warning { background: rgba(207,133,12,0.15); color: var(--tw-amber-500); }
 .sla-chip.breach { background: rgba(214,69,69,0.15); color: #D64545; }
 
+/* --- shared Ticket Progress Bar (DESIGN/08 §8.2) --- */
+.stage-bar { display: flex; align-items: center; margin: 0.4rem 0 0.15rem; clear: both; }
+.stage-dot { display: flex; flex-direction: column; align-items: center; font-size: 0.65rem; color: var(--tw-text-on-light); opacity: 0.55; }
+.stage-dot .dot { width: 10px; height: 10px; border-radius: 999px; border: 2px solid var(--tw-sage-500); background: transparent; margin-bottom: 0.2rem; }
+.stage-dot.current { opacity: 1; font-weight: 600; }
+.stage-dot.current .dot { background: var(--tw-teal-600); border-color: var(--tw-teal-600); }
+.stage-line { flex: 1; height: 2px; background: var(--tw-border); margin: 0 0.25rem; align-self: flex-start; margin-top: 5px; }
+.stage-gate { font-size: 0.75rem; font-weight: 600; color: var(--tw-sage-500); margin-left: 0.5rem; white-space: nowrap; }
+.stage-label { font-size: 0.75rem; opacity: 0.7; margin-bottom: 0.4rem; }
+.reopen-tag { margin-left: 0.5rem; color: var(--tw-coral-500); font-weight: 600; }
+
+/* --- attachments (DESIGN/08 §8.7): thumbnails inline, not a buried files tab --- */
+.attachment-item { display: inline-block; margin: 0.4rem 0.4rem 0 0; }
+.attachment-thumb { max-width: 120px; max-height: 90px; border-radius: 8px; border: 1px solid var(--tw-border); object-fit: cover; }
+.attachment-file { display: inline-block; padding: 0.3rem 0.6rem; border-radius: 8px; background: var(--tw-surface-muted); font-size: 0.8rem; text-decoration: none; color: var(--tw-text-on-light); }
+
 /* --- conversation thread --- */
 .thread { display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0; }
 .msg-bubble { max-width: 80%; padding: 0.65rem 0.9rem; border-radius: 10px; }

@@ -2,12 +2,28 @@
 {{template "header" .}}
 <h1>Users &amp; Roles</h1>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .NewAPIToken}}
+<div class="card">
+  <h3>New API token issued</h3>
+  <p class="muted">Copy this now, it will not be shown again. Any previous token for this user stops working immediately.</p>
+  <code>{{.NewAPIToken}}</code>
+</div>
+{{end}}
 <div class="card">
 <table>
-  <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Source</th></tr></thead>
+  <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Source</th><th></th></tr></thead>
   <tbody>
   {{range .Users}}
-    <tr><td>{{.ID}}</td><td>{{.Username}}</td><td>{{.Email}}</td><td>{{.Role}}</td><td>{{.Source}}</td></tr>
+    <tr>
+      <td>{{.ID}}</td><td>{{.Username}}</td><td>{{.Email}}</td><td>{{.Role}}</td><td>{{.Source}}</td>
+      <td>
+        {{if eq .Role "Agent"}}
+        <form style="display:inline" method="post" action="/admin/users/{{.ID}}/api-token" onsubmit="return confirm('Issue a new API token for {{.Username}}? Any existing token stops working immediately.')">
+          <button class="link-btn" type="submit">Issue API token</button>
+        </form>
+        {{end}}
+      </td>
+    </tr>
   {{end}}
   </tbody>
 </table>

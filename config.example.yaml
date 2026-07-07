@@ -34,3 +34,7 @@ worker:
 # or -demo work standalone with no config file at all.
 demo_mode: false
 demo_reset: false
+
+# Per-file upload cap for attachments (DESIGN/08 §8.7) - stored as a DB blob
+# column for now, not local disk or an object store.
+attachment_max_size_bytes: 10485760 # 10MB

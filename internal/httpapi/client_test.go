@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"bytes"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -61,6 +63,34 @@ func (c *client) get(path string) *http.Response {
 func (c *client) postForm(path string, form url.Values) *http.Response {
 	c.t.Helper()
 	resp, err := c.http.PostForm(c.base+path, form)
+	if err != nil {
+		c.t.Fatalf("POST %s: %v", path, err)
+	}
+	return resp
+}
+
+// postFile uploads a single file field named "file" as multipart/form-data,
+// following redirects like postForm - used for attachment upload tests.
+func (c *client) postFile(path, filename string, data []byte) *http.Response {
+	c.t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	fw, err := w.CreateFormFile("file", filename)
+	if err != nil {
+		c.t.Fatalf("create form file: %v", err)
+	}
+	if _, err := fw.Write(data); err != nil {
+		c.t.Fatalf("write form file: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		c.t.Fatalf("close multipart writer: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, c.base+path, &buf)
+	if err != nil {
+		c.t.Fatalf("build POST %s: %v", path, err)
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	resp, err := c.http.Do(req)
 	if err != nil {
 		c.t.Fatalf("POST %s: %v", path, err)
 	}

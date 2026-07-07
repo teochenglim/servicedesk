@@ -49,7 +49,7 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 	if err := gdb.AutoMigrate(
 		&models.User{}, &models.Organization{}, &models.OrgMembership{},
 		&models.Queue{}, &models.QueueMembership{}, &models.CustomFieldDef{}, &models.Ticket{},
-		&models.Tag{}, &models.TicketTag{}, &models.Note{}, &models.Watcher{},
+		&models.Tag{}, &models.TicketTag{}, &models.Note{}, &models.Attachment{}, &models.Watcher{},
 		&models.Problem{}, &models.ProblemTicket{}, &models.Webhook{}, &models.WebhookDelivery{},
 		&models.Workflow{}, &models.WorkflowTask{}, &models.Approval{}, &models.EventLog{},
 	); err != nil {
@@ -58,6 +58,14 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 
 	if err := seedDefaultQueue(gdb); err != nil {
 		return nil, fmt.Errorf("seed default queue: %w", err)
+	}
+
+	if err := renameQueueAdminRole(gdb); err != nil {
+		return nil, fmt.Errorf("rename QueueAdmin role: %w", err)
+	}
+
+	if err := backfillStageTimestamps(gdb); err != nil {
+		return nil, fmt.Errorf("backfill stage timestamps: %w", err)
 	}
 
 	switch driver {
@@ -88,6 +96,14 @@ func applyMySQLFTS(gdb *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+// renameQueueAdminRole is a one-time data fix for the RoleQueueAdmin ->
+// RoleManager rename (DESIGN/02 §2.1.1): any pre-existing user row still
+// carrying the old role string is updated in place. Idempotent - a no-op on
+// every run after the first, since no row will match "QueueAdmin" again.
+func renameQueueAdminRole(gdb *gorm.DB) error {
+	return gdb.Exec(`UPDATE users SET role = ? WHERE role = ?`, string(models.RoleManager), "QueueAdmin").Error
 }
 
 func seedDefaultQueue(gdb *gorm.DB) error {
