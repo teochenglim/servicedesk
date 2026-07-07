@@ -36,6 +36,52 @@ func (r *TicketRepo) TouchUpdatedAt(id int64) error {
 	return r.db.Model(&models.Ticket{}).Where("id = ?", id).Update("updated_at", time.Now()).Error
 }
 
+// ClaimNextBreach atomically finds and claims one non-Closed ticket whose
+// SLADueAt has passed and hasn't been alerted on yet, stamping
+// SLABreachNotifiedAt - this is what makes service.SLABreachChecker fire the
+// ticket.sla_breached webhook exactly once per breach (RELEASE/v_2.0.0.md).
+//
+// This is a single UPDATE ... WHERE id = (subquery) statement, not a
+// transaction wrapping a separate SELECT then UPDATE: cmd/servicedesk/main.go
+// runs WorkerPoolSize (default 4) copies of this poller concurrently, and a
+// separate read-then-write (even inside one db.Transaction, even re-checking
+// the condition in the UPDATE's WHERE) let every goroutine's SELECT observe
+// the same pre-claim snapshot before any UPDATE committed, so all of them
+// believed they'd won the claim - confirmed via live smoke test, which fired
+// the same breach webhook 4 times. A single atomic UPDATE has no separate
+// read step to go stale: the subquery and the claim are evaluated as one
+// write, and every dialect (sqlite/mysql/postgres) serializes writes to the
+// same row, so only the first to actually execute affects a row.
+func (r *TicketRepo) ClaimNextBreach(now time.Time) (*models.Ticket, error) {
+	// The inner SELECT is wrapped in an extra derived-table layer (the
+	// "AS breach_candidate" subquery) purely for MySQL, which otherwise
+	// rejects "SELECT id FROM tickets ..." directly inside an UPDATE ...
+	// WHERE on the same table ("can't specify target table for update in
+	// FROM clause") - the double-wrap is the standard portable workaround
+	// and is a no-op on sqlite/postgres.
+	res := r.db.Exec(
+		`UPDATE tickets SET sla_breach_notified_at = ? WHERE id = (
+			SELECT id FROM (
+				SELECT id FROM tickets
+				WHERE sla_due_at IS NOT NULL AND sla_due_at < ? AND sla_breach_notified_at IS NULL AND status != ?
+				ORDER BY id LIMIT 1
+			) AS breach_candidate
+		)`,
+		now, now, models.StatusClosed,
+	)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var t models.Ticket
+	if err := r.db.Where("sla_breach_notified_at = ?", now).Order("id DESC").First(&t).Error; err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
 // ListFilter drives the advanced filters + saved views from the PRD (3.7).
 type ListFilter struct {
 	Status     []string

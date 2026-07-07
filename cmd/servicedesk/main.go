@@ -120,6 +120,7 @@ func main() {
 	attachmentSvc := service.NewAttachmentService(attachments, notes, int64(cfg.AttachmentMaxSizeBytes))
 	queueSvc := service.NewQueueService(queues)
 	sudoSvc := service.NewSudoService(users, orgMembers, events, authMgr)
+	slaBreachChecker := service.NewSLABreachChecker(tickets, events, hub, whDispatcher, log)
 
 	server := httpapi.NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers, webhooks, workflows, workflowTasks,
@@ -139,6 +140,7 @@ func main() {
 	for i := 0; i < cfg.WorkerPoolSize; i++ {
 		go whDispatcher.Run(ctx, pollInterval)
 		go engine.Run(ctx, pollInterval)
+		go slaBreachChecker.Run(ctx, pollInterval)
 	}
 	log.Info("startup: background workers running", "pool_size", cfg.WorkerPoolSize, "poll_interval", pollInterval)
 

@@ -41,8 +41,9 @@ type testEnv struct {
 	workflowTask *repo.WorkflowTaskRepo
 	approvals    *repo.ApprovalRepo
 
-	engine       *workflow.Engine
-	whDispatcher *webhook.Dispatcher
+	engine           *workflow.Engine
+	whDispatcher     *webhook.Dispatcher
+	slaBreachChecker *service.SLABreachChecker
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -115,6 +116,7 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 	attachmentSvc := service.NewAttachmentService(attachments, notes, 10<<20)
 	queueSvc := service.NewQueueService(queues)
 	sudoSvc := service.NewSudoService(users, orgMembers, events, authMgr)
+	slaBreachChecker := service.NewSLABreachChecker(tickets, events, hub, whDispatcher, log)
 
 	srv := NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers,
@@ -132,7 +134,7 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 		users: users, orgs: orgs, orgMembers: orgMembers,
 		queues: queues, queueMembers: queueMembers,
 		webhooks: webhooks, workflows: workflows, workflowTask: workflowTask, approvals: approvals,
-		engine: engine, whDispatcher: whDispatcher,
+		engine: engine, whDispatcher: whDispatcher, slaBreachChecker: slaBreachChecker,
 	}
 }
 

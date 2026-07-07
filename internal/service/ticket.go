@@ -149,6 +149,10 @@ func (s *TicketService) Transition(actor *auth.Claims, ticketID int64, action Ac
 	case action == ActionReopen:
 		t.ResolvedAt = nil
 		t.ReopenCount++
+		// A reopened ticket is back in flight against its (unchanged) SLADueAt -
+		// clear the breach flag so SLABreachChecker alerts again if it's still
+		// (or becomes) overdue, instead of staying silently suppressed forever.
+		t.SLABreachNotifiedAt = nil
 	}
 
 	if err := s.tickets.Update(t); err != nil {

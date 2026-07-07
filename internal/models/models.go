@@ -182,6 +182,13 @@ type Ticket struct {
 	OrgID        int64      `gorm:"not null;default:0;index" json:"org_id"`
 	CustomFields string     `gorm:"not null;default:'{}'" json:"custom_fields"` // JSON blob
 	SLADueAt     *time.Time `json:"sla_due_at"`
+	// SLABreachNotifiedAt marks that the ticket.sla_breached webhook has
+	// already fired for the current SLADueAt (RELEASE/v_2.0.0.md) - the
+	// background poller (service.SLABreachChecker) claims a ticket by
+	// stamping this, so it only ever alerts once per breach. Cleared on
+	// reopen (alongside ResolvedAt) so a ticket that breaches again after
+	// being reopened alerts again.
+	SLABreachNotifiedAt *time.Time `json:"sla_breach_notified_at"`
 
 	// Stage-tracking overlay (DESIGN/03 §3.1.2b): Detect -> Ack -> Mitigate ->
 	// Resolve, driving the shared Ticket Progress Bar (DESIGN/08 §8.2). This
