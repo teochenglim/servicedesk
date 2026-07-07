@@ -64,6 +64,15 @@ h3 { font-size: 1rem; }
 .icon-rail a.active { color: #fff; border-left-color: var(--tw-coral-500); background: rgba(255,255,255,0.06); }
 .icon-rail a svg { width: 20px; height: 20px; flex: none; }
 
+/* Admin submenu (RELEASE/v_3.0.2.md) - nested directly under the Admin rail
+   entry rather than only reachable via the /admin hub page. */
+.icon-rail-sub { display: flex; flex-direction: column; gap: 0.05rem; margin: 0 0 0.3rem 0.9rem; }
+.icon-rail-sub a {
+  padding: 0.3rem 0.5rem; font-size: 0.72rem; color: rgba(255,255,255,0.55);
+  border-left: 2px solid transparent; border-radius: 6px;
+}
+.icon-rail-sub a:hover, .icon-rail-sub a.active { color: #fff; border-left-color: var(--tw-coral-500); }
+
 .app-main { flex: 1; min-width: 0; padding: 1.5rem; }
 .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
 

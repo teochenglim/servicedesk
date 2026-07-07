@@ -15,6 +15,7 @@ This project isn't under version control yet (no git repo, no tags) — the entr
 | [v2.1.0](RELEASE/v_2.1.0.md) | Knowledge Base feedback loop + Service catalog | Built — see file for exact scope (suggestion popups deferred, then built in v3.0.0; external sync still deferred); `VERSION` not yet bumped from 2.0.0 |
 | [v3.0.0](RELEASE/v_3.0.0.md) | Quick-wins backlog | Built — see file for exact scope (swipe gestures scoped out entirely, tracked in backlog) |
 | [v3.0.1](RELEASE/v_3.0.1.md) | SystemAdmin is the entire servicedesk (nav + capability-model fix) | Built — see file for exact scope |
+| [v3.0.2](RELEASE/v_3.0.2.md) | Admin sidebar submenu | Built — see file for exact scope |
 | [v3.1.0](RELEASE/v_3.1.0.md) | Larger initiatives (needs design pass) | Not started |
 
 Each version file lists what shipped, what's explicitly deferred, and any bugs found + fixed along the way (useful context for future changes in that area).

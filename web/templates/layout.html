@@ -72,6 +72,16 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 6 6 1-4.5 4.5L18 20l-6-3-6 3 1.5-6.5L3 9l6-1z"/></svg>
         <span>Admin</span>
       </a>
+      <div class="icon-rail-sub">
+        <a href="/admin/orgs" class="{{if eq .Title "Organizations"}}active{{end}}">Orgs</a>
+        <a href="/admin/users" class="{{if eq .Title "Users"}}active{{end}}">Users</a>
+        <a href="/admin/custom-fields" class="{{if eq .Title "Custom Fields"}}active{{end}}">Custom Fields</a>
+        <a href="/admin/services" class="{{if eq .Title "Services"}}active{{end}}">Services</a>
+        <a href="/admin/webhooks" class="{{if eq .Title "Webhooks"}}active{{end}}">Webhooks</a>
+        <a href="/admin/workflows" class="{{if eq .Title "Workflows"}}active{{end}}">Workflows</a>
+        <a href="/admin/audit" class="{{if eq .Title "Audit"}}active{{end}}">Audit</a>
+        <a href="/metrics">Metrics</a>
+      </div>
       {{end}}
     </nav>
     <main id="main" class="app-main">
