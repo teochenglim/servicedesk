@@ -14,6 +14,7 @@ import (
 	"servicedesk/internal/db"
 	"servicedesk/internal/demo"
 	"servicedesk/internal/httpapi"
+	"servicedesk/internal/llm"
 	"servicedesk/internal/logging"
 	"servicedesk/internal/mailer"
 	"servicedesk/internal/repo"
@@ -60,6 +61,7 @@ func main() {
 	customFields := repo.NewCustomFieldRepo(gdb)
 	events := repo.NewEventLogRepo(gdb)
 	attachments := repo.NewAttachmentRepo(gdb)
+	aiSnapshots := repo.NewAISnapshotRepo(gdb)
 
 	if err := auth.Bootstrap(users, cfg, log); err != nil {
 		logging.Fatal(log, "startup: failed to bootstrap users", "err", err)
@@ -98,8 +100,22 @@ func main() {
 	mail := mailer.New(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, cfg.SMTPUser, cfg.SMTPPass, log)
 	engine := workflow.NewEngine(workflows, workflowTasks, notes, tickets, approvals, hub, whDispatcher, mail, log)
 
+	// AI-assisted drafting + AI Ticket Intelligence Panel (DESIGN/08 §8.8-8.9) -
+	// off by default (cfg.AIEnabled). aiTrigger is left as a true nil interface
+	// (not a typed-nil *AISummaryService) when disabled, so NoteService's plain
+	// "if s.aiSummary != nil" check works correctly.
+	var aiSummarySvc *service.AISummaryService
+	var aiDraftSvc *service.AIDraftService
+	var aiTrigger service.AISummaryTrigger
+	if cfg.AIEnabled {
+		llmClient := llm.NewHTTPClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
+		aiSummarySvc = service.NewAISummaryService(aiSnapshots, tickets, notes, llmClient, cfg.AISummaryPrompt)
+		aiDraftSvc = service.NewAIDraftService(tickets, notes, llmClient, cfg.AIDraftDescriptionPrompt, cfg.AIDraftResolutionPrompt, cfg.AIDraftTransferPrompt)
+		aiTrigger = aiSummarySvc
+	}
+
 	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, log)
-	noteSvc := service.NewNoteService(notes, events, watchers, tickets, hub, whDispatcher, engine)
+	noteSvc := service.NewNoteService(notes, events, watchers, tickets, hub, whDispatcher, engine, aiTrigger, log)
 	problemSvc := service.NewProblemService(problems, tags)
 	attachmentSvc := service.NewAttachmentService(attachments, notes, int64(cfg.AttachmentMaxSizeBytes))
 	queueSvc := service.NewQueueService(queues)
@@ -107,7 +123,8 @@ func main() {
 
 	server := httpapi.NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers, webhooks, workflows, workflowTasks,
-		approvals, customFields, events, ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc, engine, hub,
+		approvals, customFields, events, ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc,
+		aiSummarySvc, aiDraftSvc, cfg.AIEnabled, engine, hub,
 	)
 	server.SetDB(gdb)
 	server.SetDemoMode(cfg.DemoMode)

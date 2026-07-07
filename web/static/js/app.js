@@ -19,6 +19,7 @@ function initMarkdownEditors(root) {
       initialValue: hidden.value || "",
       usageStatistics: false,
     });
+    mount.toastEditor = editor; // exposed so AI-draft buttons (below) can inject text
     var form = mount.closest("form");
     if (form) {
       form.addEventListener("submit", function () {
@@ -28,12 +29,47 @@ function initMarkdownEditors(root) {
   });
 }
 
+// initAIDraftButtons wires "AI draft" buttons (DESIGN/08 §8.8): each names
+// its target markdown_editor mount (data-ai-target) and the endpoint to POST
+// to (data-ai-url), optionally a "kind" (data-ai-kind, for the
+// resolution/transfer draft endpoint) or data-ai-rough (for the description
+// draft, which sends the editor's current rough text as the "rough" field).
+// The draft always replaces the editor's content - never auto-submitted,
+// the human still reviews and posts it.
+function initAIDraftButtons(root) {
+  root.querySelectorAll("[data-ai-url]:not([data-ai-initialized])").forEach(function (btn) {
+    btn.dataset.aiInitialized = "1";
+    btn.addEventListener("click", function (evt) {
+      evt.preventDefault();
+      var mount = document.getElementById(btn.dataset.aiTarget);
+      if (!mount || !mount.toastEditor) return;
+      var body = new URLSearchParams();
+      if (btn.dataset.aiKind) body.set("kind", btn.dataset.aiKind);
+      if (btn.dataset.aiRough) body.set("rough", mount.toastEditor.getMarkdown());
+
+      var original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Drafting...";
+      fetch(btn.dataset.aiUrl, { method: "POST", body: body })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { mount.toastEditor.setMarkdown(data.draft || ""); })
+        .catch(function () {})
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = original;
+        });
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   hljs.highlightAll();
   initMarkdownEditors(document);
+  initAIDraftButtons(document);
   document.body.addEventListener("htmx:afterSwap", function () {
     hljs.highlightAll();
     initMarkdownEditors(document);
+    initAIDraftButtons(document);
   });
 
   document.body.addEventListener("htmx:beforeRequest", function (evt) {

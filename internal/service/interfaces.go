@@ -14,3 +14,11 @@ type WebhookDispatcher interface {
 type WorkflowTrigger interface {
 	Trigger(triggerName string, ticketID int64, context map[string]any)
 }
+
+// AISummaryTrigger regenerates the AI Ticket Intelligence Panel (DESIGN/08
+// §8.9) - implemented by *AISummaryService, kept as an interface so
+// NoteService doesn't need a hard dependency, and so it can be nil (AI
+// features disabled) with a plain nil-check at the call site.
+type AISummaryTrigger interface {
+	Regenerate(ticketID int64, triggeringNoteID *int64) error
+}

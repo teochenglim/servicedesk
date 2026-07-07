@@ -9,6 +9,9 @@
 
   <label for="description">Description</label>
   {{template "markdown_editor" (dict "Name" "description" "Value" "" "ID" "description")}}
+  {{if .AIEnabled}}
+  <button type="button" class="link-btn" data-ai-url="/tickets/draft-description" data-ai-target="md-editor-description" data-ai-rough="1">&#10024; AI draft from what I have so far</button>
+  {{end}}
 
   <label for="queue_id">Queue</label>
   <select id="queue_id" name="queue_id" required>

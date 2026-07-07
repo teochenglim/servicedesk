@@ -11,6 +11,7 @@ import (
 	"servicedesk/internal/auth"
 	"servicedesk/internal/config"
 	"servicedesk/internal/db"
+	"servicedesk/internal/llm"
 	"servicedesk/internal/logging"
 	"servicedesk/internal/mailer"
 	"servicedesk/internal/repo"
@@ -45,6 +46,15 @@ type testEnv struct {
 }
 
 func newTestEnv(t *testing.T) *testEnv {
+	t.Helper()
+	return newTestEnvWithAI(t, nil)
+}
+
+// newTestEnvWithAI wires the same dependency graph as newTestEnv, but with
+// AI-assisted drafting + the Intelligence Panel turned on when aiClient is
+// non-nil (typically an *llm.FakeClient the caller keeps a reference to for
+// assertions) - nil leaves AI disabled, matching production's default.
+func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 	t.Helper()
 
 	gdb, err := db.Open("sqlite", ":memory:")
@@ -88,8 +98,19 @@ func newTestEnv(t *testing.T) *testEnv {
 	mail := mailer.New("", 0, "test@example.com", "", "", log)
 	engine := workflow.NewEngine(workflows, workflowTask, notes, tickets, approvals, hub, whDispatcher, mail, log)
 
+	aiSnapshots := repo.NewAISnapshotRepo(gdb)
+	var aiSummarySvc *service.AISummaryService
+	var aiDraftSvc *service.AIDraftService
+	var aiTrigger service.AISummaryTrigger
+	aiEnabled := aiClient != nil
+	if aiEnabled {
+		aiSummarySvc = service.NewAISummaryService(aiSnapshots, tickets, notes, aiClient, "")
+		aiDraftSvc = service.NewAIDraftService(tickets, notes, aiClient, "", "", "")
+		aiTrigger = aiSummarySvc
+	}
+
 	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, log)
-	noteSvc := service.NewNoteService(notes, events, watchers, tickets, hub, whDispatcher, engine)
+	noteSvc := service.NewNoteService(notes, events, watchers, tickets, hub, whDispatcher, engine, aiTrigger, log)
 	problemSvc := service.NewProblemService(problems, tags)
 	attachmentSvc := service.NewAttachmentService(attachments, notes, 10<<20)
 	queueSvc := service.NewQueueService(queues)
@@ -98,7 +119,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	srv := NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers,
 		webhooks, workflows, workflowTask, approvals, customFields, events,
-		ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc, engine, hub,
+		ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc,
+		aiSummarySvc, aiDraftSvc, aiEnabled, engine, hub,
 	)
 	srv.SetDB(gdb)
 

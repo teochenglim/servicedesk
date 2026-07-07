@@ -1,6 +1,8 @@
 package service
 
 import (
+	"log/slog"
+
 	"servicedesk/internal/auth"
 	"servicedesk/internal/models"
 	"servicedesk/internal/repo"
@@ -15,11 +17,16 @@ type NoteService struct {
 	notifier  EventPublisher
 	webhooks  WebhookDispatcher
 	workflows WorkflowTrigger
+	aiSummary AISummaryTrigger
+	log       *slog.Logger
 }
 
 func NewNoteService(notes *repo.NoteRepo, events *repo.EventLogRepo, watchers *repo.WatcherRepo, tickets *repo.TicketRepo,
-	notifier EventPublisher, webhooks WebhookDispatcher, workflows WorkflowTrigger) *NoteService {
-	return &NoteService{notes: notes, events: events, watchers: watchers, tickets: tickets, notifier: notifier, webhooks: webhooks, workflows: workflows}
+	notifier EventPublisher, webhooks WebhookDispatcher, workflows WorkflowTrigger, aiSummary AISummaryTrigger, log *slog.Logger) *NoteService {
+	return &NoteService{
+		notes: notes, events: events, watchers: watchers, tickets: tickets,
+		notifier: notifier, webhooks: webhooks, workflows: workflows, aiSummary: aiSummary, log: log,
+	}
 }
 
 // Add creates a note (3.3). Internal notes are hidden from Customers by ListByTicket's includeInternal gate.
@@ -45,6 +52,21 @@ func (s *NoteService) Add(actor *auth.Claims, ticketID int64, body string, inter
 	}
 	if s.workflows != nil {
 		s.workflows.Trigger("note_added", ticketID, map[string]any{"note": n})
+	}
+	// Re-triggered on every new note (DESIGN/08 §8.9), regenerating the whole
+	// panel from full history - run in the background since an LLM call can
+	// take seconds and shouldn't make posting a note feel slow. Best-effort:
+	// a failure here (or the process restarting mid-call) just means the
+	// panel is stale until the next note lands, not a lost/queued job - a
+	// durable retry queue (like the webhook outbox) is a natural follow-up
+	// if that ever needs to survive crashes.
+	if s.aiSummary != nil {
+		noteID := n.ID
+		go func() {
+			if err := s.aiSummary.Regenerate(ticketID, &noteID); err != nil {
+				s.log.Warn("ai summary: regenerate failed", "ticket_id", ticketID, "note_id", noteID, "err", err)
+			}
+		}()
 	}
 	return n, nil
 }

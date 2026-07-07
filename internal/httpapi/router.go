@@ -45,11 +45,14 @@ type Server struct {
 	attachmentSvc *service.AttachmentService
 	queueSvc      *service.QueueService
 	sudoSvc       *service.SudoService
+	aiSummarySvc  *service.AISummaryService // nil unless aiEnabled
+	aiDraftSvc    *service.AIDraftService   // nil unless aiEnabled
 
 	engine *workflow.Engine
 	hub    *sse.Hub
 
-	demoMode bool
+	demoMode  bool
+	aiEnabled bool
 }
 
 func NewServer(
@@ -61,6 +64,7 @@ func NewServer(
 	approvals *repo.ApprovalRepo, customFields *repo.CustomFieldRepo, events *repo.EventLogRepo,
 	ticketSvc *service.TicketService, noteSvc *service.NoteService, problemSvc *service.ProblemService,
 	attachmentSvc *service.AttachmentService, queueSvc *service.QueueService, sudoSvc *service.SudoService,
+	aiSummarySvc *service.AISummaryService, aiDraftSvc *service.AIDraftService, aiEnabled bool,
 	engine *workflow.Engine, hub *sse.Hub,
 ) *Server {
 	return &Server{
@@ -71,6 +75,7 @@ func NewServer(
 		approvals: approvals, customFields: customFields, events: events,
 		ticketSvc: ticketSvc, noteSvc: noteSvc, problemSvc: problemSvc, attachmentSvc: attachmentSvc,
 		queueSvc: queueSvc, sudoSvc: sudoSvc,
+		aiSummarySvc: aiSummarySvc, aiDraftSvc: aiDraftSvc, aiEnabled: aiEnabled,
 		engine: engine, hub: hub,
 	}
 }
@@ -125,6 +130,20 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /tickets/{id}/runbooks/{workflowID}/start", agentOnly(s.handleRunbookStart))
 	mux.Handle("POST /workflow-tasks/{id}/resume", agentOnly(s.handleWorkflowResume))
 	mux.Handle("POST /approvals/{id}/decide", agentOnly(s.handleApprovalDecide))
+
+	// AI-assisted drafting + AI Ticket Intelligence Panel (DESIGN/08 §8.8-8.9) -
+	// only registered at all when enabled (like the demo-reset route below),
+	// so they 404 rather than error when no LLM is configured.
+	if s.aiEnabled {
+		// draft-description has no ticket ID yet (ticket submission) - any
+		// authenticated user, since Customers use it too (DESIGN/08 §8.8).
+		mux.Handle("POST /tickets/draft-description", protect(s.handleAIDraftDescription))
+		// Resolution/transfer drafts and the Intelligence Panel are Engineer-facing.
+		mux.Handle("POST /tickets/{id}/ai-draft", agentOnly(s.handleAIDraft))
+		mux.Handle("POST /tickets/{id}/ai-summary/regenerate", agentOnly(s.handleAISummaryRegenerate))
+		mux.Handle("POST /tickets/{id}/ai-summary/{field}/edit", agentOnly(s.handleAISummaryEditField))
+		mux.Handle("POST /tickets/{id}/ai-summary/{field}/regenerate", agentOnly(s.handleAISummaryRegenerateField))
+	}
 
 	mux.Handle("GET /queues", protect(s.handleQueuesList))
 	mux.Handle("POST /queues", queueAdminOnly(s.handleQueueCreate))

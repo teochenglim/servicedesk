@@ -74,6 +74,10 @@ SERVICEDESK_CONFIG_FILE=config.yaml go run ./cmd/servicedesk
 | `DEMO_RESET` (or `-demo-reset`) | `false` | With `DEMO_MODE`: wipe + reseed demo data on *every* boot, not just when empty. |
 | `SEED_DEMO_ONLY` (or `-seed-demo`) | `false` | Seed demo data against the configured DB and exit immediately, without starting the server. |
 | `SERVICEDESK_ATTACHMENT_MAX_SIZE_BYTES` | `10485760` (10MB) | Per-file upload cap. Attachments are stored as a DB blob column, not on local disk or an object store yet (see [DESIGN/08](DESIGN/08_design_ux.md) §8.7). |
+| `SERVICEDESK_AI_ENABLED` | `false` | Turns on AI-assisted drafting + the AI Ticket Intelligence Panel (see [DESIGN/08](DESIGN/08_design_ux.md) §8.8-8.9). Off by default since it makes outbound/local-network calls to an LLM. |
+| `SERVICEDESK_LLM_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible `/chat/completions` endpoint. Default is a local Ollama; also works against OpenAI, Azure OpenAI, or any other self-hosted engine speaking the same wire format - just change the URL/model. |
+| `SERVICEDESK_LLM_API_KEY` | *(empty)* | Bearer token sent as `Authorization`. Not needed for a local Ollama; required by most hosted providers. |
+| `SERVICEDESK_LLM_MODEL` | `qwen3:8b` | Model name passed in each request. |
 
 ## Development
 

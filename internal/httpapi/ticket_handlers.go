@@ -22,6 +22,9 @@ type baseData struct {
 	// (DESIGN/02 §2.5), empty otherwise - drives the persistent acting-as
 	// banner in layout.html. User.* above already reflects the sudo target.
 	SudoBy string
+	// AIEnabled gates the AI draft buttons/Intelligence Panel in templates
+	// (DESIGN/08 §8.8-8.9) - off by default (Config.AIEnabled).
+	AIEnabled bool
 }
 
 type userView struct {
@@ -34,9 +37,9 @@ type userView struct {
 func (s *Server) base(r *http.Request, title string) baseData {
 	c := middleware.ClaimsFrom(r.Context())
 	if c == nil {
-		return baseData{Title: title, DemoMode: s.demoMode}
+		return baseData{Title: title, DemoMode: s.demoMode, AIEnabled: s.aiEnabled}
 	}
-	b := baseData{Title: title, DemoMode: s.demoMode, User: &userView{
+	b := baseData{Title: title, DemoMode: s.demoMode, AIEnabled: s.aiEnabled, User: &userView{
 		UserID: c.UserID, Username: c.Username, Role: c.Role, CanQueueOps: c.Role.Can(models.CapQueueOps),
 	}}
 	if c.SudoByID != nil {
@@ -67,6 +70,9 @@ type ticketsWorkspaceData struct {
 	UserNames    map[int64]string
 	UserRoles    map[int64]models.Role
 	Attachments  []models.Attachment
+	// AISummary is nil when AI features are disabled or the panel has never
+	// been generated for this ticket yet (DESIGN/08 §8.9).
+	AISummary *service.SummarySnapshotView
 }
 
 // loadTicketsList builds the ticket list query from request filters/view and
@@ -256,6 +262,7 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 
 	var agents []models.User
 	var workflows []models.Workflow
+	var aiSummary *service.SummarySnapshotView
 	if claims.Role.IsAgent() {
 		for _, u := range allUsers {
 			if u.Role.IsAgent() {
@@ -268,6 +275,13 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 				workflows = append(workflows, wf)
 			}
 		}
+		// AI Ticket Intelligence Panel (DESIGN/08 §8.9) is Engineer-facing only.
+		// gorm.ErrRecordNotFound just means it hasn't been generated yet.
+		if s.aiEnabled {
+			if snap, serr := s.aiSummarySvc.Latest(id); serr == nil {
+				aiSummary = snap
+			}
+		}
 	}
 
 	s.render.Render(w, "tickets_workspace", ticketsWorkspaceData{
@@ -276,6 +290,7 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 		Ticket: t, Notes: notes, Events: events, Tags: tags, Agents: agents,
 		Watching: watching, Workflows: workflows, WaitingTasks: waiting, WaitingForms: waitingForms,
 		Approvals: approvals, UserNames: userNames, UserRoles: userRoles, Attachments: attachments,
+		AISummary: aiSummary,
 	})
 }
 

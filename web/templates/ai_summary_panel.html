@@ -1,0 +1,34 @@
+{{define "ai_summary_panel"}}
+<div class="card" x-data="{ open: false }">
+  <div class="actions" style="justify-content:space-between; margin:0;">
+    <button type="button" class="link-btn" x-on:click="open = !open">
+      <span x-show="!open">+ AI summary</span>
+      <span x-show="open" style="display:none;">&#9662; AI summary (regenerated {{.AISummary.GeneratedAt.Format "2006-01-02 15:04"}})</span>
+    </button>
+    <form method="post" action="/tickets/{{.Ticket.ID}}/ai-summary/regenerate" x-show="open" style="display:none;">
+      <button class="link-btn" type="submit">&#8635; regenerate all</button>
+    </form>
+  </div>
+  <div x-show="open" style="display:none;">
+    {{range .AISummary.Fields}}
+    <div class="ai-summary-field" x-data="{ editing: false }">
+      <div class="actions" style="justify-content:space-between; margin:0.3rem 0 0;">
+        <strong>{{.Label}}</strong>
+        <span>
+          {{if .Locked}}<span class="reopen-tag">&#9998; edited</span>{{end}}
+          <button type="button" class="link-btn" x-on:click="editing = !editing" x-show="!editing">&#9998; edit</button>
+          {{if .Locked}}
+          <form style="display:inline" method="post" action="/tickets/{{$.Ticket.ID}}/ai-summary/{{.Key}}/regenerate"><button class="link-btn" type="submit">&#8635; regenerate</button></form>
+          {{end}}
+        </span>
+      </div>
+      <p x-show="!editing" class="muted" style="margin:0.2rem 0 0.6rem;">{{if .Value}}{{.Value}}{{else}}<em>Not enough information yet</em>{{end}}</p>
+      <form x-show="editing" style="display:none;" method="post" action="/tickets/{{$.Ticket.ID}}/ai-summary/{{.Key}}/edit" class="stacked">
+        <textarea name="value">{{.Value}}</textarea>
+        <div class="actions"><button class="secondary" type="submit">Save</button></div>
+      </form>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}

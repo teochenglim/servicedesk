@@ -73,6 +73,8 @@
   {{end}}{{end}}{{end}}
   <button type="button" class="details-chip" x-data x-on:click="$dispatch('open-details')">Details</button>
 
+  {{if .AISummary}}{{template "ai_summary_panel" .}}{{end}}
+
   <div class="ticket-columns" x-data="{ detailsOpen: false }" x-on:open-details.window="detailsOpen = true">
     <div>
       <div class="card">
@@ -202,6 +204,12 @@
             <input type="hidden" name="internal" :value="mode === 'internal' ? 'on' : ''">
             {{end}}
             {{template "markdown_editor" (dict "Name" "body" "Value" "" "ID" "note-body" "Height" "160px")}}
+            {{if and $.AIEnabled .User.Role.IsAgent}}
+            <div class="actions">
+              <button type="button" class="link-btn" data-ai-url="/tickets/{{.Ticket.ID}}/ai-draft" data-ai-kind="resolution" data-ai-target="md-editor-note-body">&#10024; Draft resolution</button>
+              <button type="button" class="link-btn" data-ai-url="/tickets/{{.Ticket.ID}}/ai-draft" data-ai-kind="transfer" data-ai-target="md-editor-note-body">&#10024; Draft transfer note</button>
+            </div>
+            {{end}}
             <div class="actions"><button class="primary" type="submit">Send</button></div>
           </form>
         </div>

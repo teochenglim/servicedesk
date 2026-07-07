@@ -38,3 +38,15 @@ demo_reset: false
 # Per-file upload cap for attachments (DESIGN/08 §8.7) - stored as a DB blob
 # column for now, not local disk or an object store.
 attachment_max_size_bytes: 10485760 # 10MB
+
+# AI-assisted drafting + AI Ticket Intelligence Panel (DESIGN/08 §8.8-8.9).
+# Off by default - enabling it means outbound (or local-network) calls to an
+# LLM whenever a draft/summary is requested. base_url/api_key/model all speak
+# the OpenAI-compatible /chat/completions format, so the same three fields
+# work against a local Ollama (default, no api_key needed), OpenAI, Azure
+# OpenAI, or any other self-hosted engine - just change the URL/model.
+ai:
+  enabled: false
+  base_url: "http://localhost:11434/v1" # Ollama's OpenAI-compatible endpoint
+  api_key: ""
+  model: "qwen3:8b"

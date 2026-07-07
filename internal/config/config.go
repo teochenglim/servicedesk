@@ -37,6 +37,25 @@ type Config struct {
 	// disk or an object store - see DESIGN/08 for the future RustFS/S3 seam -
 	// so this also bounds how much a single row can grow.
 	AttachmentMaxSizeBytes int
+
+	// AI-assisted drafting + AI Ticket Intelligence Panel (DESIGN/08 §8.8-8.9).
+	// internal/llm.HTTPClient speaks the OpenAI-compatible /chat/completions
+	// wire format, so these same three fields work against a local Ollama
+	// (the default - no LLMAPIKey needed), OpenAI, Azure OpenAI, or any other
+	// self-hosted engine that speaks the same format - just change the URL/model.
+	AIEnabled  bool
+	LLMBaseURL string
+	LLMAPIKey  string
+	LLMModel   string
+
+	// AI*Prompt override the system prompt sent for each AI feature - each
+	// empty by default, meaning "use the built-in default" (service.Default*Prompt
+	// constants in aisummary.go/aidraft.go). Lets an operator tune wording/tone
+	// or adapt to a smaller model's quirks without a code change/rebuild.
+	AISummaryPrompt          string
+	AIDraftDescriptionPrompt string
+	AIDraftResolutionPrompt  string
+	AIDraftTransferPrompt    string
 }
 
 // fileConfig mirrors Config with a friendlier YAML shape (nested db/smtp/worker
@@ -74,6 +93,22 @@ type fileConfig struct {
 	DemoReset *bool `yaml:"demo_reset"`
 
 	AttachmentMaxSizeBytes *int `yaml:"attachment_max_size_bytes"`
+
+	AI *struct {
+		Enabled *bool   `yaml:"enabled"`
+		BaseURL *string `yaml:"base_url"`
+		APIKey  *string `yaml:"api_key"`
+		Model   *string `yaml:"model"`
+
+		// Prompts *string `yaml:"prompts"` block, each optional - empty/unset
+		// means "use the built-in default" (see Config.AI*Prompt).
+		Prompts *struct {
+			Summary          *string `yaml:"summary"`
+			DraftDescription *string `yaml:"draft_description"`
+			DraftResolution  *string `yaml:"draft_resolution"`
+			DraftTransfer    *string `yaml:"draft_transfer"`
+		} `yaml:"prompts"`
+	} `yaml:"ai"`
 }
 
 // Load builds the process config from, in increasing priority: hardcoded
@@ -105,6 +140,21 @@ func Load() Config {
 		SeedDemoOnly:     flags.seedDemoOnly || getEnvBool("SEED_DEMO_ONLY", false),
 
 		AttachmentMaxSizeBytes: getEnvInt("SERVICEDESK_ATTACHMENT_MAX_SIZE_BYTES", fromIntPtr(f.AttachmentMaxSizeBytes, 10*1024*1024)),
+
+		// Off by default - AI-assisted drafting/summarization makes outbound
+		// (or local-network) calls to an LLM, which shouldn't happen on a
+		// fresh install until an operator opts in.
+		AIEnabled:  getEnvBool("SERVICEDESK_AI_ENABLED", aiBoolField(f, false)),
+		LLMBaseURL: getEnv("SERVICEDESK_LLM_BASE_URL", aiStrField(f, "base_url", "http://localhost:11434/v1")),
+		LLMAPIKey:  getEnv("SERVICEDESK_LLM_API_KEY", aiStrField(f, "api_key", "")),
+		LLMModel:   getEnv("SERVICEDESK_LLM_MODEL", aiStrField(f, "model", "qwen3:8b")),
+
+		// Empty by default (service.Default*Prompt built-ins apply) - override
+		// here to tune wording/tone or adapt to a smaller model's quirks.
+		AISummaryPrompt:          getEnv("SERVICEDESK_AI_SUMMARY_PROMPT", aiPromptField(f, "summary")),
+		AIDraftDescriptionPrompt: getEnv("SERVICEDESK_AI_DRAFT_DESCRIPTION_PROMPT", aiPromptField(f, "draft_description")),
+		AIDraftResolutionPrompt:  getEnv("SERVICEDESK_AI_DRAFT_RESOLUTION_PROMPT", aiPromptField(f, "draft_resolution")),
+		AIDraftTransferPrompt:    getEnv("SERVICEDESK_AI_DRAFT_TRANSFER_PROMPT", aiPromptField(f, "draft_transfer")),
 	}
 	if c.DemoReset {
 		c.DemoMode = true // -demo-reset/DEMO_RESET implies DemoMode
@@ -254,6 +304,47 @@ func workerIntField(f fileConfig, which string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+func aiBoolField(f fileConfig, fallback bool) bool {
+	if f.AI == nil {
+		return fallback
+	}
+	return fromBoolPtr(f.AI.Enabled, fallback)
+}
+
+func aiStrField(f fileConfig, which, fallback string) string {
+	if f.AI == nil {
+		return fallback
+	}
+	switch which {
+	case "base_url":
+		return fromPtr(f.AI.BaseURL, fallback)
+	case "api_key":
+		return fromPtr(f.AI.APIKey, fallback)
+	case "model":
+		return fromPtr(f.AI.Model, fallback)
+	}
+	return fallback
+}
+
+// aiPromptField reads ai.prompts.<which> - "" (the service-layer default)
+// if unset, since prompt overrides are opt-in, not required config.
+func aiPromptField(f fileConfig, which string) string {
+	if f.AI == nil || f.AI.Prompts == nil {
+		return ""
+	}
+	switch which {
+	case "summary":
+		return fromPtr(f.AI.Prompts.Summary, "")
+	case "draft_description":
+		return fromPtr(f.AI.Prompts.DraftDescription, "")
+	case "draft_resolution":
+		return fromPtr(f.AI.Prompts.DraftResolution, "")
+	case "draft_transfer":
+		return fromPtr(f.AI.Prompts.DraftTransfer, "")
+	}
+	return ""
 }
 
 func getEnv(key, fallback string) string {

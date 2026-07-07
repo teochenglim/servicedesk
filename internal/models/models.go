@@ -265,6 +265,26 @@ type Attachment struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+// TicketAISnapshot is one versioned generation of the AI Ticket Intelligence
+// Panel (DESIGN/08 §8.9): every regeneration (triggered by a new note) and
+// every human edit is stored as its own row, even though only the latest is
+// shown - this is what turns raw generations into a (ticket history so far ->
+// structured extraction) dataset useful for evaluating/fine-tuning later.
+// Fields is a JSON map[string]string keyed by the panel's field names
+// (service.summaryFieldOrder); EditedFields is a JSON []string of field names
+// an Engineer has locked, which the next AI regeneration must leave alone.
+type TicketAISnapshot struct {
+	ID               int64  `gorm:"primaryKey" json:"id"`
+	TicketID         int64  `gorm:"not null;index" json:"ticket_id"`
+	TriggeringNoteID *int64 `json:"triggering_note_id"`
+	// Source distinguishes an AI-generated snapshot from a human correction -
+	// the latter is closer to a gold label than a raw model guess.
+	Source       string    `gorm:"not null;size:16" json:"source"` // "ai" | "human_edit"
+	Fields       string    `gorm:"not null;default:'{}'" json:"fields"`
+	EditedFields string    `gorm:"not null;default:'[]'" json:"edited_fields"`
+	GeneratedAt  time.Time `gorm:"autoCreateTime" json:"generated_at"`
+}
+
 type Watcher struct {
 	TicketID int64 `gorm:"primaryKey" json:"ticket_id"`
 	UserID   int64 `gorm:"primaryKey" json:"user_id"`
