@@ -1,0 +1,78 @@
+{{define "admin_services"}}
+{{template "header" .}}
+<h1>Service Catalog</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+
+{{range .Services}}
+<div class="card">
+  <div class="actions" style="justify-content:space-between;">
+    <h3 style="margin:0;">{{.Name}} <span class="muted">(#{{.ID}})</span></h3>
+    <form method="post" action="/admin/services/{{.ID}}/delete" onsubmit="return confirm('Delete service?')"><button class="link-btn" type="submit">Delete</button></form>
+  </div>
+  <form class="stacked" method="post" action="/admin/services/{{.ID}}">
+    <label>Name</label><input type="text" name="name" value="{{.Name}}" required>
+    <label>Description</label><textarea name="description">{{.Description}}</textarea>
+    <label>Criticality</label>
+    <select name="criticality">
+      {{$c := .Criticality}}
+      <option {{if eq $c "Critical"}}selected{{end}}>Critical</option>
+      <option {{if eq $c "High"}}selected{{end}}>High</option>
+      <option {{if eq $c "Medium"}}selected{{end}}>Medium</option>
+      <option {{if eq $c "Low"}}selected{{end}}>Low</option>
+    </select>
+    <label>Status</label>
+    <select name="status">
+      {{$st := .Status}}
+      <option value="active" {{if eq $st "active"}}selected{{end}}>active</option>
+      <option value="deprecated" {{if eq $st "deprecated"}}selected{{end}}>deprecated</option>
+      <option value="retired" {{if eq $st "retired"}}selected{{end}}>retired</option>
+    </select>
+    <label>Owner (optional)</label>
+    <select name="owner_id">
+      <option value="">-</option>
+      {{$owner := .OwnerID}}
+      {{range $.Users}}<option value="{{.ID}}" {{if assignedTo $owner .ID}}selected{{end}}>{{.Username}} ({{.Role}})</option>{{end}}
+    </select>
+    <label>Support queue (optional)</label>
+    <select name="support_queue_id">
+      <option value="">-</option>
+      {{$sq := .SupportQueueID}}
+      {{range $.Queues}}<option value="{{.ID}}" {{if assignedTo $sq .ID}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+    <label>Parent service ID (optional)</label><input type="number" name="parent_id" value="{{.ParentID}}">
+    <div class="actions"><button class="secondary" type="submit">Save</button></div>
+  </form>
+</div>
+{{else}}
+<div class="card"><p class="muted">No services defined yet.</p></div>
+{{end}}
+
+<div class="card">
+  <h3>New service</h3>
+  <form class="stacked" method="post" action="/admin/services">
+    <label>Name</label><input type="text" name="name" required placeholder="e.g. Mail Service">
+    <label>Description</label><textarea name="description"></textarea>
+    <label>Criticality</label>
+    <select name="criticality">
+      <option>Critical</option><option>High</option><option selected>Medium</option><option>Low</option>
+    </select>
+    <label>Status</label>
+    <select name="status">
+      <option selected value="active">active</option><option value="deprecated">deprecated</option><option value="retired">retired</option>
+    </select>
+    <label>Owner (optional)</label>
+    <select name="owner_id">
+      <option value="">-</option>
+      {{range .Users}}<option value="{{.ID}}">{{.Username}} ({{.Role}})</option>{{end}}
+    </select>
+    <label>Support queue (optional)</label>
+    <select name="support_queue_id">
+      <option value="">-</option>
+      {{range .Queues}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    <label>Parent service ID (optional)</label><input type="number" name="parent_id">
+    <div class="actions"><button class="primary" type="submit">Create service</button></div>
+  </form>
+</div>
+{{template "footer" .}}
+{{end}}

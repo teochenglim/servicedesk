@@ -27,18 +27,19 @@ type TicketService struct {
 	notifier  EventPublisher
 	webhooks  WebhookDispatcher
 	workflows WorkflowTrigger
+	kb        KBProposalTrigger
 	log       *slog.Logger
 }
 
 func NewTicketService(
 	tickets *repo.TicketRepo, events *repo.EventLogRepo, watchers *repo.WatcherRepo,
 	tags *repo.TagRepo, queues *repo.QueueRepo, notes *repo.NoteRepo, queueMembers *repo.QueueMembershipRepo,
-	notifier EventPublisher, webhooks WebhookDispatcher, workflows WorkflowTrigger, log *slog.Logger,
+	notifier EventPublisher, webhooks WebhookDispatcher, workflows WorkflowTrigger, kb KBProposalTrigger, log *slog.Logger,
 ) *TicketService {
 	return &TicketService{
 		tickets: tickets, events: events, watchers: watchers, tags: tags, queues: queues, notes: notes,
 		queueMembers: queueMembers,
-		notifier:     notifier, webhooks: webhooks, workflows: workflows, log: log,
+		notifier:     notifier, webhooks: webhooks, workflows: workflows, kb: kb, log: log,
 	}
 }
 
@@ -49,6 +50,9 @@ type CreateTicketInput struct {
 	QueueID      int64
 	Category     string
 	CustomFields map[string]any
+	// ServiceID is the business service this ticket impacts (RELEASE/v_2.1.0.md
+	// Service catalog) - optional, nil means "unknown," which is a normal state.
+	ServiceID *int64
 	// DetectedAt backdates the stage-tracking overlay's Detect stage to an
 	// earlier monitoring trigger time (DESIGN/03 §3.1.2b) - only honored when
 	// actor holds CapAgentDetect; ignored otherwise so an ordinary Customer or
@@ -87,6 +91,7 @@ func (s *TicketService) Create(actor *auth.Claims, in CreateTicketInput) (*model
 		CreatorID:    actor.UserID,
 		OrgID:        actor.OrgID,
 		CustomFields: string(cf),
+		ServiceID:    in.ServiceID,
 		DetectedAt:   &detectedAt,
 		SLADueAt:     slaDueAt(q, priority, category, now),
 	}
@@ -157,6 +162,18 @@ func (s *TicketService) Transition(actor *auth.Claims, ticketID int64, action Ac
 
 	if err := s.tickets.Update(t); err != nil {
 		return nil, err
+	}
+
+	// Knowledge Base Feedback Loop (DESIGN/08 §8.10): propose a draft KB
+	// article from this resolution, after the ticket's Resolved state is
+	// persisted. Gated on final == StatusResolved (not e.g. "ResolvedAt just
+	// got set"), which is true exactly once per Transition call that lands on
+	// Resolved - including again after a reopen -> re-resolve cycle - so this
+	// fires exactly once per resolution with no separate de-dup flag needed.
+	if final == models.StatusResolved && s.kb != nil {
+		if err := s.kb.Propose(t.ID); err != nil {
+			s.log.Warn("kb: propose from resolution failed", "ticket_id", t.ID, "err", err)
+		}
 	}
 
 	cursor := from
@@ -284,6 +301,12 @@ type UpdateFieldsInput struct {
 	Priority     *models.Priority
 	Category     *string
 	CustomFields map[string]any
+	// ServiceID is double-pointered because "unknown" (nil) is itself a
+	// meaningful, settable state for this field - unlike the other fields
+	// above, a plain *int64 couldn't distinguish "don't touch this field"
+	// from "clear it back to unknown." Outer nil = don't touch; outer
+	// non-nil pointing to a nil inner = clear to unknown; non-nil inner = set.
+	ServiceID **int64
 }
 
 func (s *TicketService) UpdateFields(actor *auth.Claims, ticketID int64, in UpdateFieldsInput) (*models.Ticket, error) {
@@ -308,6 +331,9 @@ func (s *TicketService) UpdateFields(actor *auth.Claims, ticketID int64, in Upda
 		cf, _ := json.Marshal(in.CustomFields)
 		t.CustomFields = string(cf)
 		changed["custom_fields"] = in.CustomFields
+	}
+	if in.ServiceID != nil {
+		t.ServiceID, changed["service_id"] = *in.ServiceID, *in.ServiceID
 	}
 	if err := s.tickets.Update(t); err != nil {
 		return nil, err

@@ -27,6 +27,12 @@
   <label for="category">Category</label>
   <input id="category" type="text" name="category" placeholder="e.g. database, network">
 
+  <label for="service_id">Impacted service (optional)</label>
+  <select id="service_id" name="service_id">
+    <option value="">Unknown</option>
+    {{range .Services}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+
   <div class="actions"><button class="primary" type="submit">Create ticket</button></div>
 </form>
 </div>

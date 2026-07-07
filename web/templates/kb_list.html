@@ -1,0 +1,20 @@
+{{define "kb_list"}}
+{{template "header" .}}
+<h1>Knowledge Base</h1>
+{{if .User.Role.IsAgent}}
+<p class="muted"><a href="/kb/review">Review queue &rarr;</a></p>
+{{end}}
+<div class="card">
+<table>
+  <thead><tr><th>Title</th><th>Symptom</th></tr></thead>
+  <tbody>
+  {{range .Articles}}
+    <tr onclick="window.location='/kb/{{.ID}}'" style="cursor:pointer">
+      <td>{{.Title}}</td><td class="muted">{{.Symptom}}</td>
+    </tr>
+  {{else}}<tr><td colspan="2" class="muted">No published articles yet.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{template "footer" .}}
+{{end}}

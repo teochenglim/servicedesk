@@ -177,6 +177,11 @@ type Ticket struct {
 	Category    string       `gorm:"not null;default:''" json:"category"`
 	AssigneeID  *int64       `gorm:"index" json:"assignee_id"`
 	CreatorID   int64        `gorm:"not null;index" json:"creator_id"`
+	// ServiceID is the business service this ticket impacts (RELEASE/v_2.1.0.md's
+	// Service catalog) - optional and never required, "unknown" is a normal
+	// state. Orthogonal to QueueID: Queue is which team routes/handles the
+	// ticket, Service is which business-facing system it's about.
+	ServiceID *int64 `gorm:"index" json:"service_id"`
 	// OrgID scopes Customer visibility (multi-tenant); 0 for tickets created
 	// by internal staff, who aren't tied to any organization.
 	OrgID        int64      `gorm:"not null;default:0;index" json:"org_id"`
@@ -295,6 +300,125 @@ type TicketAISnapshot struct {
 type Watcher struct {
 	TicketID int64 `gorm:"primaryKey" json:"ticket_id"`
 	UserID   int64 `gorm:"primaryKey" json:"user_id"`
+}
+
+type ServiceCriticality string
+
+const (
+	ServiceCriticalityCritical ServiceCriticality = "Critical"
+	ServiceCriticalityHigh     ServiceCriticality = "High"
+	ServiceCriticalityMedium   ServiceCriticality = "Medium"
+	ServiceCriticalityLow      ServiceCriticality = "Low"
+)
+
+type ServiceStatus string
+
+const (
+	ServiceStatusActive     ServiceStatus = "active"
+	ServiceStatusDeprecated ServiceStatus = "deprecated"
+	ServiceStatusRetired    ServiceStatus = "retired"
+)
+
+// Service is the business-service catalog (RELEASE/v_2.1.0.md), e.g. "Mail
+// Service" or "Payment Gateway" - a CMDB-lite concept distinct from Queue:
+// Queue is which team routes/handles a ticket, Service is which
+// business-facing system it's about. Criticality/Status/Owner/SupportQueue
+// are the common fields research on CMDB business-service models converges
+// on (ServiceNow business-criticality tiers, ITIL known-error "affected
+// service"). CRUD is SystemAdmin-only (see httpapi/service_handlers.go) -
+// a system-configuration concern like Users/Webhooks/Workflows, not a
+// day-to-day queue/SLA concern like Queue/CustomFieldDef.
+type Service struct {
+	ID          int64              `gorm:"primaryKey" json:"id"`
+	Name        string             `gorm:"not null;size:190;uniqueIndex" json:"name"`
+	Description string             `gorm:"not null;default:''" json:"description"`
+	Criticality ServiceCriticality `gorm:"not null;default:Medium;size:16" json:"criticality"`
+	Status      ServiceStatus      `gorm:"not null;default:active;size:16" json:"status"`
+	OwnerID     *int64             `gorm:"index" json:"owner_id"`
+	// SupportQueueID is which Queue picks up incidents against this service -
+	// optional, since not every service maps 1:1 onto a queue.
+	SupportQueueID *int64 `gorm:"index" json:"support_queue_id"`
+	// ParentID makes this self-referencing (same pattern as
+	// Organization.ParentID / Queue.ParentID) so a component service (e.g.
+	// "Exchange Online") can roll up into a parent business service (e.g.
+	// "Mail Service") without a schema change later.
+	ParentID *int64 `json:"parent_id"`
+	// External CMDB sync seam (schema-only this cycle, RELEASE/v_2.1.0.md) -
+	// same StorageBackend-style extension point as Attachment: empty means
+	// this row is the source of truth; a future sync job would populate these
+	// against whatever external CMDB/service-catalog tool a deployment uses.
+	ExternalSource string    `gorm:"not null;default:'';size:32" json:"external_source"`
+	ExternalID     string    `gorm:"not null;default:'';size:190" json:"external_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type KBArticleStatus string
+
+const (
+	KBStatusDraft     KBArticleStatus = "draft"
+	KBStatusPublished KBArticleStatus = "published"
+)
+
+// KBArticle is the Knowledge Base Feedback Loop's article (DESIGN/08 §8.10):
+// every resolved ticket becomes a candidate contribution, curated by a human
+// before anything reaches a Customer-facing surface. Field list is grounded
+// in KCS methodology (Issue/Environment/Cause/Resolution) and ITIL
+// known-error-database conventions (symptom, affected service, root cause,
+// workaround, resolution), split into a customer-facing block (surfaced
+// as-is once published) and an engineer/internal-only block (never shown to
+// a Customer, regardless of publish status).
+type KBArticle struct {
+	ID     int64           `gorm:"primaryKey" json:"id"`
+	Title  string          `gorm:"not null" json:"title"`
+	Status KBArticleStatus `gorm:"not null;default:draft;size:16;index" json:"status"`
+
+	// Customer-facing fields (DESIGN/08 §8.10 point 3) - only ever reach a
+	// Customer once Status is published (KBService.CanView).
+	Symptom          string `gorm:"not null;default:''" json:"symptom"`            // KCS "Issue" - the customer's own words
+	WhatToObserve    string `gorm:"not null;default:''" json:"what_to_observe"`    // recognizable signs, phrased for a future customer
+	SelfServiceSteps string `gorm:"not null;default:''" json:"self_service_steps"` // maintained checklist a customer can try before filing
+	Resolution       string `gorm:"not null;default:''" json:"resolution"`         // customer-facing fix/workaround copy
+
+	// Engineer/internal-only fields - never reach a Customer-facing surface.
+	Environment     string `gorm:"not null;default:''" json:"environment"` // KCS "Environment": product/version/process this applies to
+	RootCause       string `gorm:"not null;default:''" json:"root_cause"`
+	ValidationSteps string `gorm:"not null;default:''" json:"validation_steps"` // how the root cause was confirmed, not just what it was
+	ResolutionSteps string `gorm:"not null;default:''" json:"resolution_steps"` // the actual technical fix procedure (vs. the customer-facing Resolution copy)
+	Workaround      string `gorm:"not null;default:''" json:"workaround"`       // temporary mitigation, distinct from the permanent Resolution
+	// BlastRadius is the scope of impact for the incident this article
+	// documents - which users/transactions/services were pulled in
+	// (structural + execution blast radius, per incident-response
+	// convention). Which specific Service(s) were impacted is captured via
+	// KBArticleService below, not duplicated here as free text.
+	BlastRadius string `gorm:"not null;default:''" json:"blast_radius"`
+
+	// Lifecycle / provenance
+	SourceTicketID   *int64     `gorm:"index" json:"source_ticket_id"`
+	SourceSnapshotID *int64     `json:"source_snapshot_id"` // the TicketAISnapshot this was proposed from, if any
+	RelatedArticleID *int64     `json:"related_article_id"` // set when proposed as a diff against an existing similar article (KBService.MatchForSymptom)
+	CreatedByID      int64      `gorm:"not null" json:"created_by_id"`
+	ApprovedByID     *int64     `json:"approved_by_id"`
+	PublishedAt      *time.Time `json:"published_at"`
+
+	// External sync seam (schema-only this cycle, same pattern as Service above).
+	ExternalSource string     `gorm:"not null;default:'';size:32" json:"external_source"`
+	ExternalID     string     `gorm:"not null;default:'';size:190" json:"external_id"`
+	ExternalURL    string     `gorm:"not null;default:''" json:"external_url"`
+	LastSyncedAt   *time.Time `json:"last_synced_at"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// KBArticleService links an article to the business Service(s) it covers -
+// many-to-many, since one incident (and its article) can span multiple
+// services (e.g. an SSO outage touching both Email and Payments).
+// Criticality is deliberately read live off the linked Service rather than
+// copied onto KBArticle, so it can't drift from the catalog.
+type KBArticleService struct {
+	KBArticleID int64 `gorm:"primaryKey" json:"kb_article_id"`
+	ServiceID   int64 `gorm:"primaryKey" json:"service_id"`
 }
 
 type Problem struct {

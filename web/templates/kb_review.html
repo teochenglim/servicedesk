@@ -1,0 +1,20 @@
+{{define "kb_review"}}
+{{template "header" .}}
+<h1>KB Review Queue</h1>
+<p class="muted">Draft articles proposed from resolved tickets - review, edit, and approve before they publish to <a href="/kb">the Knowledge Base</a>.</p>
+<div class="card">
+<table>
+  <thead><tr><th>Title</th><th>Symptom</th><th>Source ticket</th><th>Created</th></tr></thead>
+  <tbody>
+  {{range .Drafts}}
+    <tr onclick="window.location='/kb/{{.ID}}'" style="cursor:pointer">
+      <td>{{.Title}}</td><td class="muted">{{.Symptom}}</td>
+      <td>{{if .SourceTicketID}}<a href="/tickets/{{.SourceTicketID}}">#{{.SourceTicketID}}</a>{{else}}-{{end}}</td>
+      <td class="muted">{{.CreatedAt.Format "2006-01-02"}}</td>
+    </tr>
+  {{else}}<tr><td colspan="4" class="muted">No drafts awaiting review.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+{{template "footer" .}}
+{{end}}

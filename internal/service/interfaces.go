@@ -22,3 +22,11 @@ type WorkflowTrigger interface {
 type AISummaryTrigger interface {
 	Regenerate(ticketID int64, triggeringNoteID *int64) error
 }
+
+// KBProposalTrigger proposes a Knowledge Base draft from a resolved ticket
+// (DESIGN/08 §8.10) - implemented by *KBService, kept as an interface so
+// TicketService doesn't need a hard dependency on it, same decoupling
+// pattern as AISummaryTrigger above.
+type KBProposalTrigger interface {
+	Propose(ticketID int64) error
+}

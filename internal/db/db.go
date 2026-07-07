@@ -53,6 +53,7 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 		&models.Problem{}, &models.ProblemTicket{}, &models.Webhook{}, &models.WebhookDelivery{},
 		&models.Workflow{}, &models.WorkflowTask{}, &models.Approval{}, &models.EventLog{},
 		&models.TicketAISnapshot{},
+		&models.Service{}, &models.KBArticle{}, &models.KBArticleService{},
 	); err != nil {
 		return nil, fmt.Errorf("automigrate: %w", err)
 	}

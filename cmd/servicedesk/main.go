@@ -62,6 +62,8 @@ func main() {
 	events := repo.NewEventLogRepo(gdb)
 	attachments := repo.NewAttachmentRepo(gdb)
 	aiSnapshots := repo.NewAISnapshotRepo(gdb)
+	services := repo.NewServiceRepo(gdb)
+	kbArticles := repo.NewKBArticleRepo(gdb)
 
 	if err := auth.Bootstrap(users, cfg, log); err != nil {
 		logging.Fatal(log, "startup: failed to bootstrap users", "err", err)
@@ -114,17 +116,25 @@ func main() {
 		aiTrigger = aiSummarySvc
 	}
 
-	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, log)
+	// Knowledge Base Feedback Loop (DESIGN/08 §8.10, RELEASE/v_2.1.0.md) - not
+	// gated behind cfg.AIEnabled: ProposeFromTicket falls back to empty seed
+	// fields when there's no AI snapshot, so curators can draft/publish
+	// articles manually even with AI features off.
+	kbSvc := service.NewKBService(kbArticles, tickets, aiSnapshots)
+
+	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, kbSvc, log)
 	noteSvc := service.NewNoteService(notes, events, watchers, tickets, hub, whDispatcher, engine, aiTrigger, log)
 	problemSvc := service.NewProblemService(problems, tags)
 	attachmentSvc := service.NewAttachmentService(attachments, notes, int64(cfg.AttachmentMaxSizeBytes))
 	queueSvc := service.NewQueueService(queues)
 	sudoSvc := service.NewSudoService(users, orgMembers, events, authMgr)
+	serviceSvc := service.NewServiceCatalogService(services)
 	slaBreachChecker := service.NewSLABreachChecker(tickets, events, hub, whDispatcher, log)
 
 	server := httpapi.NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers, webhooks, workflows, workflowTasks,
 		approvals, customFields, events, ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc,
+		serviceSvc, kbSvc,
 		aiSummarySvc, aiDraftSvc, cfg.AIEnabled, engine, hub,
 	)
 	server.SetDB(gdb)

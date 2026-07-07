@@ -35,6 +35,32 @@ const (
 	demoPassword   = "demo1234"
 )
 
+// serviceSpecs is the demo Service catalog (RELEASE/v_2.1.0.md) - QueueIdx
+// indexes into queueSpecs (the support queue that would pick up incidents
+// against it).
+var serviceSpecs = []struct {
+	Name, Description string
+	Criticality       models.ServiceCriticality
+	QueueIdx          int
+}{
+	{"Mail Service", "Corporate email (hosted Exchange).", models.ServiceCriticalityCritical, 0},
+	{"VPN Gateway", "Remote-access VPN concentrator.", models.ServiceCriticalityHigh, 1},
+	{"Corporate Network", "Office wifi, switches, and firewall.", models.ServiceCriticalityMedium, 1},
+	{"File Server", "Shared department drives.", models.ServiceCriticalityMedium, 0},
+	{"Guest WiFi", "Guest wireless network.", models.ServiceCriticalityLow, 0},
+}
+
+// ticketServiceLinks maps a ticketSpecs index to a serviceSpecs index for a
+// handful of demo tickets - the rest are left with no impacted service, since
+// "unknown" is itself a normal, common state (RELEASE/v_2.1.0.md).
+var ticketServiceLinks = map[int]int{
+	0: 0, 8: 0, // email tickets -> Mail Service
+	1: 1, 10: 1, 14: 1, // VPN tickets -> VPN Gateway
+	4: 2, 7: 2, 12: 2, // wifi/switch/firewall tickets -> Corporate Network
+	6: 3, // shared drive -> File Server
+	9: 4, // guest wifi request -> Guest WiFi
+}
+
 // Empty reports whether the database has no seed data yet - used at startup
 // to decide whether DemoMode (without DemoReset) should seed at all.
 func Empty(db *gorm.DB) (bool, error) {
@@ -61,7 +87,11 @@ func Seed(db *gorm.DB, log *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("demo: create users: %w", err)
 		}
-		tickets, err := createTickets(tx, orgs, queues, users)
+		services, err := createServices(tx, queues, users)
+		if err != nil {
+			return fmt.Errorf("demo: create services: %w", err)
+		}
+		tickets, err := createTickets(tx, orgs, queues, users, services)
 		if err != nil {
 			return fmt.Errorf("demo: create tickets: %w", err)
 		}
@@ -74,8 +104,11 @@ func Seed(db *gorm.DB, log *slog.Logger) error {
 		if err := createWorkflow(tx, users); err != nil {
 			return fmt.Errorf("demo: create workflow: %w", err)
 		}
+		if err := createKBArticles(tx, tickets, services, users); err != nil {
+			return fmt.Errorf("demo: create kb articles: %w", err)
+		}
 		log.Info("demo: seed complete",
-			"orgs", len(orgs), "queues", len(queues),
+			"orgs", len(orgs), "queues", len(queues), "services", len(services),
 			"engineers", len(users.Engineers), "customers", len(users.Customers), "tickets", len(tickets))
 		return nil
 	})
@@ -112,6 +145,8 @@ func wipe(db *gorm.DB) error {
 		if len(ticketIDs) > 0 {
 			var problemIDs []int64
 			tx.Model(&models.ProblemTicket{}).Where("ticket_id IN ?", ticketIDs).Pluck("problem_id", &problemIDs)
+			var kbArticleIDs []int64
+			tx.Model(&models.KBArticle{}).Where("source_ticket_id IN ?", ticketIDs).Pluck("id", &kbArticleIDs)
 
 			for _, del := range []any{
 				&models.Approval{}, &models.WorkflowTask{}, &models.Note{}, &models.Watcher{}, &models.TicketTag{},
@@ -131,6 +166,22 @@ func wipe(db *gorm.DB) error {
 					return err
 				}
 			}
+			if len(kbArticleIDs) > 0 {
+				if err := tx.Where("kb_article_id IN ?", kbArticleIDs).Delete(&models.KBArticleService{}).Error; err != nil {
+					return err
+				}
+				if err := tx.Where("id IN ?", kbArticleIDs).Delete(&models.KBArticle{}).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		serviceNames := make([]string, len(serviceSpecs))
+		for i, s := range serviceSpecs {
+			serviceNames[i] = s.Name
+		}
+		if err := tx.Where("name IN ?", serviceNames).Delete(&models.Service{}).Error; err != nil {
+			return err
 		}
 
 		if err := tx.Where("name = ?", workflowName).Delete(&models.Workflow{}).Error; err != nil {
@@ -243,6 +294,23 @@ func createUsers(tx *gorm.DB, orgs []models.Organization, queues []models.Queue)
 	return seededUsers{Manager: qadmin, Engineers: engineers, Customers: customers}, nil
 }
 
+// createServices seeds the demo Service catalog (RELEASE/v_2.1.0.md), all
+// owned by the demo Manager for simplicity.
+func createServices(tx *gorm.DB, queues []models.Queue, users seededUsers) ([]models.Service, error) {
+	services := make([]models.Service, len(serviceSpecs))
+	for i, spec := range serviceSpecs {
+		queueID := queues[spec.QueueIdx].ID
+		services[i] = models.Service{
+			Name: spec.Name, Description: spec.Description, Criticality: spec.Criticality,
+			Status: models.ServiceStatusActive, OwnerID: &users.Manager.ID, SupportQueueID: &queueID,
+		}
+		if err := tx.Create(&services[i]).Error; err != nil {
+			return nil, err
+		}
+	}
+	return services, nil
+}
+
 // ticketSpec describes one seeded ticket. CustomerIdx/EngineerIdx/QueueIdx
 // index into the slices createUsers/createQueues returned; the customer's
 // org (via the 2-per-org split in createUsers) becomes the ticket's OrgID.
@@ -275,7 +343,7 @@ var ticketSpecs = []ticketSpec{
 	{"Site-to-site VPN down", "Branch office tunnel has been down since last night.", "network", models.PriorityP1, models.StatusInProgress, 1, 2, eng(2), "breach"},
 }
 
-func createTickets(tx *gorm.DB, orgs []models.Organization, queues []models.Queue, users seededUsers) ([]models.Ticket, error) {
+func createTickets(tx *gorm.DB, orgs []models.Organization, queues []models.Queue, users seededUsers, services []models.Service) ([]models.Ticket, error) {
 	tickets := make([]models.Ticket, len(ticketSpecs))
 	for i, sp := range ticketSpecs {
 		var assignee *int64
@@ -283,13 +351,18 @@ func createTickets(tx *gorm.DB, orgs []models.Organization, queues []models.Queu
 			id := users.Engineers[*sp.EngineerIdx].ID
 			assignee = &id
 		}
+		var serviceID *int64
+		if svcIdx, ok := ticketServiceLinks[i]; ok {
+			id := services[svcIdx].ID
+			serviceID = &id
+		}
 		customer := users.Customers[sp.CustomerIdx]
 		org := orgs[sp.CustomerIdx/2]
 		detectedAt, ackedAt, mitigatedAt, resolvedAt := demoStageTimestamps(sp.Status, time.Now())
 		tickets[i] = models.Ticket{
 			Title: sp.Title, Description: sp.Description, Priority: sp.Priority, Status: sp.Status,
 			QueueID: queues[sp.QueueIdx].ID, Category: sp.Category, AssigneeID: assignee,
-			CreatorID: customer.ID, OrgID: org.ID, SLADueAt: slaDue(sp.SLA),
+			CreatorID: customer.ID, OrgID: org.ID, ServiceID: serviceID, SLADueAt: slaDue(sp.SLA),
 			DetectedAt: detectedAt, AckedAt: ackedAt, MitigatedAt: mitigatedAt, ResolvedAt: resolvedAt,
 		}
 		if err := tx.Create(&tickets[i]).Error; err != nil {
@@ -388,6 +461,57 @@ func createProblem(tx *gorm.DB, tickets []models.Ticket) error {
 		}
 	}
 	return nil
+}
+
+// createKBArticles seeds two Knowledge Base Feedback Loop articles
+// (DESIGN/08 §8.10, RELEASE/v_2.1.0.md): one already published (so /kb isn't
+// empty in the demo) and one still a draft (so /kb/review has something to
+// curate). Both are sourced from already-Resolved demo tickets, mirroring
+// what KBService.ProposeFromTicket would produce.
+func createKBArticles(tx *gorm.DB, tickets []models.Ticket, services []models.Service, users seededUsers) error {
+	// ticketSpecs[8] "Email spam filter too aggressive" (Resolved) -> Mail Service.
+	publishedTicketID := tickets[8].ID
+	now := time.Now()
+	published := models.KBArticle{
+		Title:            "Vendor emails going to spam",
+		Status:           models.KBStatusPublished,
+		Symptom:          "Legitimate vendor emails are landing in the junk/spam folder instead of the inbox.",
+		WhatToObserve:    "Expected emails from known vendors are missing from the inbox but present in Junk Email.",
+		SelfServiceSteps: "Check the Junk Email folder and mark the sender as \"Not Junk\"; add the sender to your Safe Senders list.",
+		Resolution:       "The spam filter's sender-reputation threshold was tuned down for known vendor domains; affected senders were added to the allow list.",
+		Environment:      "Corporate email (hosted Exchange), all users.",
+		RootCause:        "Spam filter's sender-reputation threshold was too aggressive for newer vendor sending domains.",
+		ValidationSteps:  "Reproduced by sending a test message from the affected vendor domain and confirming it landed in Junk; confirmed clean after allow-listing.",
+		ResolutionSteps:  "Added the vendor domains to the mail gateway's allow list and lowered the reputation-score threshold by one tier.",
+		Workaround:       "Mark individual messages as \"Not Junk\" until the allow-list change propagates.",
+		BlastRadius:      "All Mail Service users; no data loss, messages were quarantined not deleted.",
+		SourceTicketID:   &publishedTicketID,
+		CreatedByID:      users.Engineers[0].ID,
+		ApprovedByID:     &users.Manager.ID,
+		PublishedAt:      &now,
+	}
+	if err := tx.Create(&published).Error; err != nil {
+		return err
+	}
+	if err := tx.Create(&models.KBArticleService{KBArticleID: published.ID, ServiceID: services[0].ID}).Error; err != nil {
+		return err
+	}
+
+	// ticketSpecs[2] "Printer offline on 3rd floor" (Resolved) - no Service
+	// link (printer isn't in the demo catalog), left as a draft awaiting
+	// curation - illustrates the propose-on-resolve -> review queue step
+	// before anything reaches the Customer-facing /kb.
+	draftTicketID := tickets[2].ID
+	draft := models.KBArticle{
+		Title:          "Printer shows offline in Windows",
+		Status:         models.KBStatusDraft,
+		Symptom:        "Printer shows as \"offline\" in Windows even though it's powered on and connected.",
+		Resolution:     "Removed and re-added the printer using its static IP address.",
+		RootCause:      "Printer's DHCP lease changed, but the Windows printer port still pointed at the old IP.",
+		SourceTicketID: &draftTicketID,
+		CreatedByID:    users.Engineers[0].ID,
+	}
+	return tx.Create(&draft).Error
 }
 
 // createWorkflow adds one Runbook (auto_assign + notify) so automation isn't

@@ -1,0 +1,62 @@
+{{define "kb_detail"}}
+{{template "header" .}}
+<h1>{{.Article.Title}} <span class="badge status-{{.Article.Status}}">{{.Article.Status}}</span></h1>
+
+<div class="card">
+  <h3>Symptom</h3><p>{{.Article.Symptom}}</p>
+  <h3>What you'd observe</h3><p>{{.Article.WhatToObserve}}</p>
+  <h3>Self-service steps</h3><p>{{markdown .Article.SelfServiceSteps}}</p>
+  <h3>Resolution</h3><p>{{markdown .Article.Resolution}}</p>
+</div>
+
+{{if .CanEdit}}
+<div class="card">
+  <h3>Internal notes (staff only)</h3>
+  <p><strong>Environment:</strong> {{.Article.Environment}}</p>
+  <p><strong>Root cause:</strong> {{.Article.RootCause}}</p>
+  <p><strong>Validation steps:</strong> {{.Article.ValidationSteps}}</p>
+  <p><strong>Resolution steps:</strong> {{.Article.ResolutionSteps}}</p>
+  <p><strong>Workaround:</strong> {{.Article.Workaround}}</p>
+  <p><strong>Blast radius:</strong> {{.Article.BlastRadius}}</p>
+  {{if .Article.SourceTicketID}}<p><strong>Source ticket:</strong> <a href="/tickets/{{.Article.SourceTicketID}}">#{{.Article.SourceTicketID}}</a></p>{{end}}
+  {{if .Article.RelatedArticleID}}<p><strong>Proposed as an update to:</strong> <a href="/kb/{{.Article.RelatedArticleID}}">#{{.Article.RelatedArticleID}}</a></p>{{end}}
+
+  <h4>Impacted services</h4>
+  {{range .Services}}<span class="tag">{{.Name}} ({{.Criticality}})</span>{{else}}<p class="muted">None linked.</p>{{end}}
+
+  <h4>Edit</h4>
+  <form class="stacked" method="post" action="/kb/{{.Article.ID}}">
+    <label>Title</label><input type="text" name="title" value="{{.Article.Title}}" required>
+    <label>Symptom</label><textarea name="symptom">{{.Article.Symptom}}</textarea>
+    <label>What you'd observe</label><textarea name="what_to_observe">{{.Article.WhatToObserve}}</textarea>
+    <label>Self-service steps</label><textarea name="self_service_steps">{{.Article.SelfServiceSteps}}</textarea>
+    <label>Resolution (customer-facing)</label><textarea name="resolution">{{.Article.Resolution}}</textarea>
+    <label>Environment</label><input type="text" name="environment" value="{{.Article.Environment}}">
+    <label>Root cause</label><textarea name="root_cause">{{.Article.RootCause}}</textarea>
+    <label>Validation steps</label><textarea name="validation_steps">{{.Article.ValidationSteps}}</textarea>
+    <label>Resolution steps (technical)</label><textarea name="resolution_steps">{{.Article.ResolutionSteps}}</textarea>
+    <label>Workaround</label><textarea name="workaround">{{.Article.Workaround}}</textarea>
+    <label>Blast radius</label><textarea name="blast_radius">{{.Article.BlastRadius}}</textarea>
+    <label>Impacted services</label>
+    {{$linked := .Services}}
+    {{range .AllServices}}
+      {{$svc := .}}
+      {{$checked := false}}
+      {{range $linked}}{{if eq .ID $svc.ID}}{{$checked = true}}{{end}}{{end}}
+      <label style="display:block;"><input type="checkbox" name="service_ids" value="{{.ID}}" style="width:auto; display:inline-block;" {{if $checked}}checked{{end}}> {{.Name}} ({{.Criticality}})</label>
+    {{end}}
+    <div class="actions"><button class="secondary" type="submit">Save</button></div>
+  </form>
+
+  {{if eq .Article.Status "draft"}}
+  <form method="post" action="/kb/{{.Article.ID}}/approve" style="margin-top:0.6rem;">
+    <button class="primary" type="submit">Approve &amp; publish</button>
+  </form>
+  {{end}}
+  <form method="post" action="/kb/{{.Article.ID}}/delete" onsubmit="return confirm('Delete this article?')" style="margin-top:0.4rem;">
+    <button class="link-btn" type="submit">Delete</button>
+  </form>
+</div>
+{{end}}
+{{template "footer" .}}
+{{end}}

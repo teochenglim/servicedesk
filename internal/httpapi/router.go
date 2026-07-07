@@ -45,6 +45,8 @@ type Server struct {
 	attachmentSvc *service.AttachmentService
 	queueSvc      *service.QueueService
 	sudoSvc       *service.SudoService
+	serviceSvc    *service.ServiceCatalogService
+	kbSvc         *service.KBService
 	aiSummarySvc  *service.AISummaryService // nil unless aiEnabled
 	aiDraftSvc    *service.AIDraftService   // nil unless aiEnabled
 
@@ -64,6 +66,7 @@ func NewServer(
 	approvals *repo.ApprovalRepo, customFields *repo.CustomFieldRepo, events *repo.EventLogRepo,
 	ticketSvc *service.TicketService, noteSvc *service.NoteService, problemSvc *service.ProblemService,
 	attachmentSvc *service.AttachmentService, queueSvc *service.QueueService, sudoSvc *service.SudoService,
+	serviceSvc *service.ServiceCatalogService, kbSvc *service.KBService,
 	aiSummarySvc *service.AISummaryService, aiDraftSvc *service.AIDraftService, aiEnabled bool,
 	engine *workflow.Engine, hub *sse.Hub,
 ) *Server {
@@ -74,7 +77,7 @@ func NewServer(
 		webhooks: webhooks, workflows: workflows, workflowTask: workflowTask,
 		approvals: approvals, customFields: customFields, events: events,
 		ticketSvc: ticketSvc, noteSvc: noteSvc, problemSvc: problemSvc, attachmentSvc: attachmentSvc,
-		queueSvc: queueSvc, sudoSvc: sudoSvc,
+		queueSvc: queueSvc, sudoSvc: sudoSvc, serviceSvc: serviceSvc, kbSvc: kbSvc,
 		aiSummarySvc: aiSummarySvc, aiDraftSvc: aiDraftSvc, aiEnabled: aiEnabled,
 		engine: engine, hub: hub,
 	}
@@ -125,6 +128,8 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /attachments/{id}", protect(s.handleAttachmentDownload))
 	mux.Handle("POST /tickets/{id}/watch", protect(s.handleWatch))
 	mux.Handle("POST /tickets/{id}/unwatch", protect(s.handleUnwatch))
+	// Setting/correcting the impacted service is a triage action (RELEASE/v_2.1.0.md).
+	mux.Handle("POST /tickets/{id}/service", agentOnly(s.handleTicketServiceUpdate))
 	mux.Handle("POST /tickets/{id}/labels", agentOnly(s.handleLabelAdd))
 	mux.Handle("POST /tickets/{id}/labels/{tagID}/delete", agentOnly(s.handleLabelRemove))
 	mux.Handle("POST /tickets/{id}/runbooks/{workflowID}/start", agentOnly(s.handleRunbookStart))
@@ -160,6 +165,18 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /problems/{id}", protect(s.handleProblemDetail))
 	mux.Handle("POST /problems/{id}/link", agentOnly(s.handleProblemLink))
 
+	// Knowledge Base Feedback Loop (DESIGN/08 §8.10): /kb is the published,
+	// customer-safe browse surface (any authenticated role); /kb/review is
+	// the human curation queue (Engineer+ only) that gates anything ever
+	// reaching /kb. Submission-time/triage-time suggestion popups are a
+	// deferred follow-up - see RELEASE/v_2.1.0.md.
+	mux.Handle("GET /kb", protect(s.handleKBList))
+	mux.Handle("GET /kb/review", agentOnly(s.handleKBReview))
+	mux.Handle("GET /kb/{id}", protect(s.handleKBDetail))
+	mux.Handle("POST /kb/{id}", agentOnly(s.handleKBUpdate))
+	mux.Handle("POST /kb/{id}/approve", agentOnly(s.handleKBApprove))
+	mux.Handle("POST /kb/{id}/delete", agentOnly(s.handleKBDelete))
+
 	// GET /admin is now ServiceDeskAdmin's own home screen (full user list +
 	// Sudo-as buttons, DESIGN/08 §8.3) - adminOnly, not agentOnly, since that
 	// content (every user's role, one-tap sudo) must not be visible to
@@ -180,6 +197,13 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /admin/users/{id}/api-token", adminOnly(s.handleUserIssueAPIToken))
 	mux.Handle("GET /admin/custom-fields", queueAdminOnly(s.handleCustomFieldsList))
 	mux.Handle("POST /admin/custom-fields", queueAdminOnly(s.handleCustomFieldCreate))
+	// Service catalog (RELEASE/v_2.1.0.md) - SystemAdmin-only, same gate as
+	// Users/Webhooks/Workflows: a system-configuration concern, not a
+	// day-to-day queue/SLA concern like Queue/CustomFieldDef above.
+	mux.Handle("GET /admin/services", adminOnly(s.handleServicesList))
+	mux.Handle("POST /admin/services", adminOnly(s.handleServiceCreate))
+	mux.Handle("POST /admin/services/{id}", adminOnly(s.handleServiceUpdate))
+	mux.Handle("POST /admin/services/{id}/delete", adminOnly(s.handleServiceDelete))
 	// Sudo-as (DESIGN/02 §2.5): Start requires CapSudo (SystemAdmin only,
 	// checked again inside SudoService.Start per ARCHITECTURE.md's
 	// defense-in-depth rule). Stop is intentionally just `protect` - while a

@@ -292,31 +292,47 @@ Because this panel is regenerated wholesale rather than appended, it also natura
 
 ## 8.10 Shared component: Knowledge Base Feedback Loop
 
-§8.9's panel captures structured data per ticket. This is the layer that makes it compound: every resolved ticket becomes a candidate contribution to a living, external-facing Knowledge Base, and every new ticket can pull from anything already learned — not just "symptom → resolution," but the fuller diagnostic picture.
+§8.9's panel captures structured data per ticket. This is the layer that makes it compound: every resolved ticket becomes a candidate contribution to a living Knowledge Base, and every new ticket can pull from anything already learned — not just "symptom → resolution," but the fuller diagnostic picture. Shipped in [v_2.1.0.md](../RELEASE/v_2.1.0.md); field list below is grounded in a research pass over KCS methodology (the industry-standard support-article structure: Issue/Environment/Cause/Resolution), ITIL known-error-database conventions (symptom, affected service, root cause, workaround, resolution), and incident-response "blast radius" terminology (scope of impact — users/transactions/services pulled in) — not invented from scratch.
 
-Expanded fields, beyond §8.9's symptom/resolution:
+**Customer-facing fields** (only ever shown once an article is published — §8.11's trust-boundary rule):
 
-- **What the customer should observe** — the recognizable signs of this issue, phrased for a future customer, not just this one.
+- **Symptom** — the customer's own words for the issue (KCS's "Issue" field).
+- **What the customer should observe** — the recognizable signs of this issue, phrased for a future customer, not just this one (KCS's "Environment" adapted to a customer-facing framing).
 - **Customer self-service steps** — the seed of this is already captured in §8.9 ("what the user already tried"); here it graduates into a maintained checklist other customers can try before filing at all.
-- **Engineer validation/troubleshooting notes** — not just the root cause, but how it was confirmed.
+- **Resolution** — the customer-facing fix/workaround copy.
+
+**Engineer/internal-only fields** (never reach a Customer-facing surface, regardless of publish status):
+
+- **Environment** — KCS's field proper: product/version/process this article applies to (distinct from the customer-facing "what to observe" above).
+- **Root cause** — the underlying technical cause.
+- **Validation steps** — not just the root cause, but how it was confirmed; this is the field the original design brief called out by name.
+- **Resolution steps** — the actual technical fix procedure, distinct from the customer-facing Resolution copy above.
+- **Workaround** — a temporary mitigation, distinct from the permanent Resolution (ITIL known-error-database convention: workarounds and permanent fixes are tracked separately).
+- **Blast radius** — scope of impact for the incident this article documents (which users/transactions/services were pulled in); *which* Service(s) were impacted is a structured link (see §8.10a below), not free text here.
 
 Article lifecycle:
 
-1. Ticket resolves → the AI panel's final extraction is proposed as a KB draft, either a new article or a diff against an existing similar one.
-2. Human curation gate. An Engineer or ServiceDeskAdmin reviews and approves before anything publishes externally — nothing auto-publishes to a customer-facing KB.
-3. Published article stores: symptom, what to observe, customer self-service steps, resolution (all customer-facing), plus validation/diagnosis notes kept internal-only for Engineer eyes.
-4. Next similar ticket, the system suggests the matching article at two points: to the Customer at submission ("This looks like it might be: {article title}. Try these steps first?" — always with an easy "didn't help, file the ticket anyway" path), and to the Engineer at triage ("Similar past tickets: {article}" with validation/diagnosis notes surfaced immediately).
-
-Matching runs on the structured extraction (symptom + what-to-observe), not raw freeform ticket text — far more reliable than keyword matching on whatever a customer happened to type.
+1. Ticket resolves → the AI panel's final extraction (if AI is enabled and a snapshot exists; empty seed fields otherwise — the loop doesn't require AI) is proposed as a KB draft, either a new article or a diff against an existing similar one (matched via `KBService.MatchForSymptom` — simplest-first token-overlap scoring across published articles' symptom/what-to-observe fields; smarter matching is an enhancement, not a prerequisite).
+2. Human curation gate. An Engineer or ServiceDeskAdmin reviews and approves before anything publishes — nothing auto-publishes to a customer-facing surface. `GET /kb/review` is the curation queue.
+3. Published article stores every field above; `GET /kb` is the published, Customer-safe browse surface.
+4. **Deferred** (not yet built, v_2.1.0.md scope note): surfacing the matching article proactively at two points — to the Customer at submission ("This looks like it might be: {article title}. Try these steps first?" — always with an easy "didn't help, file the ticket anyway" path), and to the Engineer at triage ("Similar past tickets: {article}"). `MatchForSymptom` exists and is unit-tested; only the UI wiring at these two screens is deferred. `GET /kb` (plain manual browse/search) is what ships in its place for now.
 
 ```
-[Submitting ticket...]
+[Submitting ticket...]                              ⚠ deferred - not yet wired
 ⚡ This might be: "Checkout 504 after cert renewal window"
    Suggested steps: clear cache, retry after 5 min, check status page
    [Try these first]   [Not it — file my ticket]
 ```
 
 The versioned snapshots in §8.9 matter beyond training a future model — they're also the raw material for this loop today, before any model retraining ever happens: a human curator can promote a good snapshot into a KB article manually from day one, and smarter suggestion-matching is an enhancement, not a prerequisite.
+
+## 8.10a Shared component: Service catalog
+
+A KB article's "which service is this about, and is it critical" needs a real entity behind it, not a free-text field — a lightweight, CMDB-style business-service catalog (`Service`), distinct from `Queue` (which team routes a ticket; `Service` is which business-facing system it's about). Common fields, per a research pass over CMDB/business-service-model conventions: `Name`, `Description`, `Criticality` (`Critical`/`High`/`Medium`/`Low` — matches the tiered-criticality convention most CMDB tools use, e.g. ServiceNow's "Most/Somewhat/Less/Not Critical"), `Status` (`active`/`deprecated`/`retired`), an optional `Owner` and `SupportQueue`, and a self-referencing `Parent` (same pattern as `Organization`/`Queue`, for a future component-service hierarchy, e.g. "Exchange Online" rolling up into "Mail Service").
+
+A ticket's impacted service (`Ticket.ServiceID`) is optional and settable at both submission and triage — "unknown" is a normal, common state, never required. A KB article can name 0+ impacted services (`KBArticleService`, many-to-many — one incident can span multiple services); the article never duplicates a service's criticality as its own field, it's read live off the linked `Service` so it can't drift from the catalog.
+
+CRUD for the Service catalog itself is SystemAdmin-only (`/admin/services`) — a system-configuration concern like Users/Webhooks/Workflows, not a day-to-day queue/SLA concern like Queue/CustomFieldDef (which Manager owns via `CapQueueOps`).
 
 ## 8.11 Cross-cutting UI rules
 

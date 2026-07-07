@@ -88,6 +88,18 @@ func TestSeed_CreatesExpectedCounts(t *testing.T) {
 	if userCount != 11 { // 1 Manager + 4 Engineers + 6 Customers
 		t.Errorf("demo users = %d, want 11", userCount)
 	}
+
+	if got := count(t, gdb, &models.Service{}); got != int64(len(serviceSpecs)) {
+		t.Errorf("services = %d, want %d", got, len(serviceSpecs))
+	}
+	if got := count(t, gdb, &models.KBArticle{}); got != 2 {
+		t.Errorf("kb articles = %d, want 2", got)
+	}
+	var publishedCount int64
+	gdb.Model(&models.KBArticle{}).Where("status = ?", models.KBStatusPublished).Count(&publishedCount)
+	if publishedCount != 1 {
+		t.Errorf("published kb articles = %d, want 1", publishedCount)
+	}
 }
 
 func TestReset_WipesAndReseeds(t *testing.T) {
@@ -109,6 +121,12 @@ func TestReset_WipesAndReseeds(t *testing.T) {
 	}
 	if got := count(t, gdb, &models.Organization{}); got != 3 {
 		t.Errorf("organizations after reset = %d, want 3", got)
+	}
+	if got := count(t, gdb, &models.Service{}); got != int64(len(serviceSpecs)) {
+		t.Errorf("services after reset = %d, want %d", got, len(serviceSpecs))
+	}
+	if got := count(t, gdb, &models.KBArticle{}); got != 2 {
+		t.Errorf("kb articles after reset = %d, want 2", got)
 	}
 
 	var secondTicketIDs []int64

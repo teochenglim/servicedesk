@@ -73,6 +73,10 @@ type ticketsWorkspaceData struct {
 	// AISummary is nil when AI features are disabled or the panel has never
 	// been generated for this ticket yet (DESIGN/08 §8.9).
 	AISummary *service.SummarySnapshotView
+	// Services backs the "impacted service" select on both the ticket-new
+	// form and the ticket detail/triage view (RELEASE/v_2.1.0.md Service
+	// catalog) - always includable, empty selection means "unknown."
+	Services []models.Service
 }
 
 // loadTicketsList builds the ticket list query from request filters/view and
@@ -145,13 +149,31 @@ func (s *Server) handleTicketsList(w http.ResponseWriter, r *http.Request) {
 
 type ticketNewData struct {
 	baseData
-	Queues []models.Queue
-	Error  string
+	Queues   []models.Queue
+	Services []models.Service
+	Error    string
 }
 
 func (s *Server) handleTicketNewPage(w http.ResponseWriter, r *http.Request) {
 	queues, _ := s.queues.List()
-	s.render.Render(w, "ticket_new", ticketNewData{baseData: s.base(r, "New ticket"), Queues: queues})
+	services, _ := s.serviceSvc.List()
+	s.render.Render(w, "ticket_new", ticketNewData{baseData: s.base(r, "New ticket"), Queues: queues, Services: services})
+}
+
+// parseServiceID reads the "service_id" form field (an <select> with a blank
+// "Unknown" option) into a *int64 - empty string means unknown, matching
+// Ticket.ServiceID's nullable "unknown is a normal state" semantics
+// (RELEASE/v_2.1.0.md).
+func parseServiceID(r *http.Request) (*int64, error) {
+	raw := r.FormValue("service_id")
+	if raw == "" {
+		return nil, nil
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
 }
 
 func (s *Server) handleTicketCreate(w http.ResponseWriter, r *http.Request) {
@@ -161,20 +183,54 @@ func (s *Server) handleTicketCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	queueID, _ := strconv.ParseInt(r.FormValue("queue_id"), 10, 64)
+	serviceID, err := parseServiceID(r)
+	if err != nil {
+		http.Error(w, "invalid service id", http.StatusBadRequest)
+		return
+	}
 	t, err := s.ticketSvc.Create(claims, service.CreateTicketInput{
 		Title:       r.FormValue("title"),
 		Description: r.FormValue("description"),
 		Priority:    models.Priority(r.FormValue("priority")),
 		QueueID:     queueID,
 		Category:    r.FormValue("category"),
+		ServiceID:   serviceID,
 	})
 	if err != nil {
 		queues, _ := s.queues.List()
-		s.render.Render(w, "ticket_new", ticketNewData{baseData: s.base(r, "New ticket"), Queues: queues, Error: err.Error()})
+		services, _ := s.serviceSvc.List()
+		s.render.Render(w, "ticket_new", ticketNewData{baseData: s.base(r, "New ticket"), Queues: queues, Services: services, Error: err.Error()})
 		return
 	}
 	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- t.ID is our own DB-generated int64, not user input
 	http.Redirect(w, r, "/tickets/"+strconv.FormatInt(t.ID, 10), http.StatusSeeOther)
+}
+
+// handleTicketServiceUpdate lets Engineer+ set/correct the ticket's impacted
+// service at triage (RELEASE/v_2.1.0.md) - a dedicated small endpoint rather
+// than folding into a generic field-edit form, matching this codebase's
+// granular-action style (pickup/assign/mitigate are separate endpoints too).
+func (s *Server) handleTicketServiceUpdate(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFrom(r.Context())
+	id, err := ticketIDFromPath(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	serviceID, err := parseServiceID(r)
+	if err != nil {
+		http.Error(w, "invalid service id", http.StatusBadRequest)
+		return
+	}
+	if _, err := s.ticketSvc.UpdateFields(claims, id, service.UpdateFieldsInput{ServiceID: &serviceID}); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	redirectToTicket(w, r, id)
 }
 
 type waitingForm struct {
@@ -284,13 +340,18 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	services, err := s.serviceSvc.List()
+	if err != nil {
+		s.log.Warn("ticket detail: could not load services", "err", err)
+	}
+
 	s.render.Render(w, "tickets_workspace", ticketsWorkspaceData{
 		baseData: s.base(r, "Ticket #"+strconv.FormatInt(t.ID, 10)),
 		Tickets:  tickets, Queues: queues, Filter: f, View: view,
 		Ticket: t, Notes: notes, Events: events, Tags: tags, Agents: agents,
 		Watching: watching, Workflows: workflows, WaitingTasks: waiting, WaitingForms: waitingForms,
 		Approvals: approvals, UserNames: userNames, UserRoles: userRoles, Attachments: attachments,
-		AISummary: aiSummary,
+		AISummary: aiSummary, Services: services,
 	})
 }
 

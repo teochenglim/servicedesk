@@ -40,6 +40,9 @@ type testEnv struct {
 	workflows    *repo.WorkflowRepo
 	workflowTask *repo.WorkflowTaskRepo
 	approvals    *repo.ApprovalRepo
+	services     *repo.ServiceRepo
+	kbArticles   *repo.KBArticleRepo
+	tickets      *repo.TicketRepo
 
 	engine           *workflow.Engine
 	whDispatcher     *webhook.Dispatcher
@@ -87,6 +90,8 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 	customFields := repo.NewCustomFieldRepo(gdb)
 	events := repo.NewEventLogRepo(gdb)
 	attachments := repo.NewAttachmentRepo(gdb)
+	services := repo.NewServiceRepo(gdb)
+	kbArticles := repo.NewKBArticleRepo(gdb)
 
 	cfg := config.Config{StaticUsers: ""}
 	if err := auth.Bootstrap(users, cfg, log); err != nil {
@@ -110,18 +115,21 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 		aiTrigger = aiSummarySvc
 	}
 
-	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, log)
+	kbSvc := service.NewKBService(kbArticles, tickets, aiSnapshots)
+	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, kbSvc, log)
 	noteSvc := service.NewNoteService(notes, events, watchers, tickets, hub, whDispatcher, engine, aiTrigger, log)
 	problemSvc := service.NewProblemService(problems, tags)
 	attachmentSvc := service.NewAttachmentService(attachments, notes, 10<<20)
 	queueSvc := service.NewQueueService(queues)
 	sudoSvc := service.NewSudoService(users, orgMembers, events, authMgr)
+	serviceSvc := service.NewServiceCatalogService(services)
 	slaBreachChecker := service.NewSLABreachChecker(tickets, events, hub, whDispatcher, log)
 
 	srv := NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers,
 		webhooks, workflows, workflowTask, approvals, customFields, events,
 		ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc,
+		serviceSvc, kbSvc,
 		aiSummarySvc, aiDraftSvc, aiEnabled, engine, hub,
 	)
 	srv.SetDB(gdb)
@@ -134,6 +142,7 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 		users: users, orgs: orgs, orgMembers: orgMembers,
 		queues: queues, queueMembers: queueMembers,
 		webhooks: webhooks, workflows: workflows, workflowTask: workflowTask, approvals: approvals,
+		services: services, kbArticles: kbArticles, tickets: tickets,
 		engine: engine, whDispatcher: whDispatcher, slaBreachChecker: slaBreachChecker,
 	}
 }

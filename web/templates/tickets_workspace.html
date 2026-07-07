@@ -81,6 +81,17 @@
         <p class="muted">{{if .User.Role.IsAgent}}Queue {{.Ticket.QueueID}} · {{end}}Category {{.Ticket.Category}} · <span class="badge prio-{{.Ticket.Priority}}">{{.Ticket.Priority}}</span></p>
         <div>{{markdown .Ticket.Description}}</div>
 
+        {{if .User.Role.IsAgent}}
+        <form method="post" action="/tickets/{{.Ticket.ID}}/service" class="actions">
+          <label class="muted" style="margin:0;">Impacted service</label>
+          <select name="service_id" onchange="this.form.submit()">
+            <option value="">Unknown</option>
+            {{$sid := .Ticket.ServiceID}}
+            {{range .Services}}<option value="{{.ID}}" {{if assignedTo $sid .ID}}selected{{end}}>{{.Name}} ({{.Criticality}})</option>{{end}}
+          </select>
+        </form>
+        {{end}}
+
         <div class="actions">
           {{if .User.Role.IsAgent}}
           {{if eq .Ticket.Status "New"}}
