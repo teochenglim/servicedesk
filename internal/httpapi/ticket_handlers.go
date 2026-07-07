@@ -18,13 +18,17 @@ type baseData struct {
 	Title    string
 	User     *userView
 	DemoMode bool
+	// SudoBy is the real admin's username during a Sudo-as session
+	// (DESIGN/02 §2.5), empty otherwise - drives the persistent acting-as
+	// banner in layout.html. User.* above already reflects the sudo target.
+	SudoBy string
 }
 
 type userView struct {
 	UserID      int64
 	Username    string
 	Role        models.Role
-	CanQueueOps bool // Manager (or SystemAdmin via future Sudo-as) - see DESIGN/02 §2.1.1
+	CanQueueOps bool // Manager (or SystemAdmin via Sudo-as) - see DESIGN/02 §2.1.1
 }
 
 func (s *Server) base(r *http.Request, title string) baseData {
@@ -32,9 +36,13 @@ func (s *Server) base(r *http.Request, title string) baseData {
 	if c == nil {
 		return baseData{Title: title, DemoMode: s.demoMode}
 	}
-	return baseData{Title: title, DemoMode: s.demoMode, User: &userView{
+	b := baseData{Title: title, DemoMode: s.demoMode, User: &userView{
 		UserID: c.UserID, Username: c.Username, Role: c.Role, CanQueueOps: c.Role.Can(models.CapQueueOps),
 	}}
+	if c.SudoByID != nil {
+		b.SudoBy = c.SudoByUsername
+	}
+	return b
 }
 
 type ticketsWorkspaceData struct {

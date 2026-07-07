@@ -130,6 +130,11 @@ type Queue struct {
 	ParentID        *int64 `json:"parent_id"`
 	DefaultPriority string `gorm:"not null;default:P3" json:"default_priority"`
 	DefaultCategory string `gorm:"not null;default:''" json:"default_category"`
+	// SLATargets is a JSON blob mapping Priority -> SLA duration in minutes
+	// (e.g. {"P1":240,"P2":480}), mirroring the Ticket.CustomFields pattern
+	// (DESIGN/08 §8.6). Empty/missing priorities fall back to package-level
+	// defaults - see service.slaTargetsFor.
+	SLATargets string `gorm:"not null;default:'{}'" json:"sla_targets"`
 }
 
 // QueueMembership is which Engineers belong to which queue (e.g. an
@@ -348,10 +353,14 @@ type Approval struct {
 }
 
 type EventLog struct {
-	ID        int64     `gorm:"primaryKey" json:"id"`
-	TicketID  *int64    `gorm:"index" json:"ticket_id"`
-	ActorID   *int64    `json:"actor_id"`
-	Event     string    `gorm:"not null" json:"event"`
-	Details   string    `gorm:"not null;default:'{}'" json:"details"` // JSON
+	ID       int64  `gorm:"primaryKey" json:"id"`
+	TicketID *int64 `gorm:"index" json:"ticket_id"`
+	ActorID  *int64 `gorm:"index" json:"actor_id"`
+	Event    string `gorm:"not null" json:"event"`
+	Details  string `gorm:"not null;default:'{}'" json:"details"` // JSON
+	// SudoByID records the real admin's user ID when this event happened
+	// during a Sudo-as session (ActorID is always the sudo target's, so
+	// every other RBAC/attribution path works unmodified) - DESIGN/02 §2.5.
+	SudoByID  *int64    `gorm:"index" json:"sudo_by_id"`
 	CreatedAt time.Time `json:"created_at"`
 }

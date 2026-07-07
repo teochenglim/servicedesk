@@ -1,0 +1,26 @@
+{{define "admin_audit"}}
+{{template "header" .}}
+<div class="actions" style="justify-content:space-between;">
+  <h1>Audit log</h1>
+  <a class="btn secondary" href="/admin/audit?actor_id={{.ActorRaw}}&event={{.Filter.Event}}{{if .Filter.SudoOnly}}&sudo_only=on{{end}}&format=csv">Export CSV</a>
+</div>
+
+<form class="filters" method="get" action="/admin/audit">
+  <input type="text" name="actor_id" placeholder="Actor user ID" value="{{.ActorRaw}}">
+  <input type="text" name="event" placeholder="Event contains..." value="{{.Filter.Event}}">
+  <label><input type="checkbox" name="sudo_only" {{if .Filter.SudoOnly}}checked{{end}}> Sudo sessions only</label>
+  <button class="secondary" type="submit">Filter</button>
+</form>
+
+<div class="card">
+{{range .Events}}
+<div class="note">
+  <div class="meta">{{.CreatedAt.Format "2006-01-02 15:04:05"}} &middot; {{.ActorName}}{{if .SudoByName}} (sudo'd in by {{.SudoByName}}){{end}} &middot; {{.Event}}{{if .TicketID}} &middot; ticket #{{.TicketID}}{{end}}</div>
+  <code>{{.Details}}</code>
+</div>
+{{else}}
+<p class="muted">No matching events.</p>
+{{end}}
+</div>
+{{template "footer" .}}
+{{end}}

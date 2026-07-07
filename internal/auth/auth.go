@@ -80,6 +80,13 @@ type Claims struct {
 	// OrgID is the organization this session is scoped to (multi-tenant
 	// Customer visibility); 0 for internal staff, who see across all orgs.
 	OrgID int64 `json:"org_id"`
+	// SudoByID/SudoByUsername identify the real SystemAdmin when this token
+	// was minted by IssueSudoToken (DESIGN/02 §2.5) - every other field above
+	// (UserID/Username/Role/OrgID) is the sudo *target's* identity, so every
+	// existing RBAC/queue-membership/visibility check evaluates against them
+	// unmodified. nil/empty outside a sudo session.
+	SudoByID       *int64 `json:"sudo_by_id,omitempty"`
+	SudoByUsername string `json:"sudo_by_username,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -103,6 +110,31 @@ func (m *Manager) IssueToken(u models.User, orgID int64) (string, error) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    m.issuer,
 			Subject:   u.Username,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(m.ttl)),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(m.secret)
+}
+
+// IssueSudoToken mints a session-scoped JWT carrying the target user's
+// identity, with adminID/adminUsername recorded as SudoBy (DESIGN/02 §2.5).
+// Deliberately reuses the same TTL as a normal login: natural expiry forcing
+// a fresh login is not a silent-timeout violation (identity is never
+// ambiguous), so a sudo session doesn't need its own longer-lived expiry.
+func (m *Manager) IssueSudoToken(target models.User, orgID, adminID int64, adminUsername string) (string, error) {
+	now := time.Now()
+	claims := Claims{
+		UserID:         target.ID,
+		Username:       target.Username,
+		Role:           target.Role,
+		OrgID:          orgID,
+		SudoByID:       &adminID,
+		SudoByUsername: adminUsername,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    m.issuer,
+			Subject:   target.Username,
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(m.ttl)),
 		},

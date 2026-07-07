@@ -88,6 +88,7 @@ func (s *TicketService) Create(actor *auth.Claims, in CreateTicketInput) (*model
 		OrgID:        actor.OrgID,
 		CustomFields: string(cf),
 		DetectedAt:   &detectedAt,
+		SLADueAt:     slaDueAt(q, priority, category, now),
 	}
 	if err := s.tickets.Create(t); err != nil {
 		return nil, err
@@ -97,7 +98,7 @@ func (s *TicketService) Create(actor *auth.Claims, in CreateTicketInput) (*model
 		s.log.Error("ticket create: auto-watch by creator failed", "ticket_id", t.ID, "user_id", actor.UserID, "err", err)
 	}
 	metrics.MTTDSeconds.Observe(now.Sub(detectedAt).Seconds())
-	s.logEvent(t.ID, &actor.UserID, "ticket_created", map[string]any{"title": t.Title})
+	s.logEvent(t.ID, actor, "ticket_created", map[string]any{"title": t.Title})
 	s.fanOut("ticket.created", t.ID, t)
 	s.workflows.Trigger("ticket_created", t.ID, map[string]any{"ticket": t})
 	return t, nil
@@ -156,7 +157,7 @@ func (s *TicketService) Transition(actor *auth.Claims, ticketID int64, action Ac
 
 	cursor := from
 	for _, st := range path {
-		s.logEvent(t.ID, &actor.UserID, "status_changed", map[string]any{
+		s.logEvent(t.ID, actor, "status_changed", map[string]any{
 			"from": cursor, "to": st, "action": action, "reason": reason,
 		})
 		cursor = st
@@ -222,7 +223,7 @@ func (s *TicketService) assign(actor *auth.Claims, ticketID, assigneeID int64, a
 	if err := s.tickets.Update(t); err != nil {
 		return nil, err
 	}
-	s.logEvent(t.ID, &actor.UserID, "assigned", map[string]any{"assignee_id": assigneeID, "action": action})
+	s.logEvent(t.ID, actor, "assigned", map[string]any{"assignee_id": assigneeID, "action": action})
 	s.fanOut("ticket.assigned", t.ID, t)
 	s.workflows.Trigger("field_updated", t.ID, map[string]any{"ticket": t, "field": "assignee_id"})
 	return t, nil
@@ -253,7 +254,7 @@ func (s *TicketService) MarkMitigated(actor *auth.Claims, ticketID int64, note s
 	if err := s.tickets.Update(t); err != nil {
 		return nil, err
 	}
-	s.logEvent(t.ID, &actor.UserID, "ticket_mitigated", map[string]any{"via_agent": actor.Role == models.RoleAgent})
+	s.logEvent(t.ID, actor, "ticket_mitigated", map[string]any{"via_agent": actor.Role == models.RoleAgent})
 
 	// Mirrors NoteService.Add's write + fan-out directly (TicketService only
 	// holds repo.NoteRepo, not NoteService, so this stays a repo-level Create
@@ -307,7 +308,7 @@ func (s *TicketService) UpdateFields(actor *auth.Claims, ticketID int64, in Upda
 	if err := s.tickets.Update(t); err != nil {
 		return nil, err
 	}
-	s.logEvent(t.ID, &actor.UserID, "field_updated", changed)
+	s.logEvent(t.ID, actor, "field_updated", changed)
 	s.fanOut("ticket.updated", t.ID, t)
 	s.workflows.Trigger("field_updated", t.ID, map[string]any{"ticket": t, "changed": changed})
 	return t, nil
@@ -326,7 +327,7 @@ func (s *TicketService) AddLabel(actor *auth.Claims, ticketID int64, name, kind 
 	if err := s.tags.AttachToTicket(ticketID, tag.ID); err != nil {
 		return err
 	}
-	s.logEvent(ticketID, &actor.UserID, "label_added", map[string]any{"name": name, "kind": kind})
+	s.logEvent(ticketID, actor, "label_added", map[string]any{"name": name, "kind": kind})
 	s.fanOut("ticket.label_added", ticketID, map[string]any{"name": name, "kind": kind})
 	return nil
 }
@@ -335,13 +336,18 @@ func (s *TicketService) RemoveLabel(actor *auth.Claims, ticketID, tagID int64) e
 	if err := s.tags.DetachFromTicket(ticketID, tagID); err != nil {
 		return err
 	}
-	s.logEvent(ticketID, &actor.UserID, "label_removed", map[string]any{"tag_id": tagID})
+	s.logEvent(ticketID, actor, "label_removed", map[string]any{"tag_id": tagID})
 	return nil
 }
 
-func (s *TicketService) logEvent(ticketID int64, actorID *int64, event string, details map[string]any) {
+// logEvent attributes the event to actor's identity (the sudo target's, if
+// this action happened during a Sudo-as session) and additionally stamps
+// SudoByID when set, so the row is self-describing without reconstructing
+// session boundaries (DESIGN/02 §2.5).
+func (s *TicketService) logEvent(ticketID int64, actor *auth.Claims, event string, details map[string]any) {
 	b, _ := json.Marshal(details)
-	if err := s.events.Append(&models.EventLog{TicketID: &ticketID, ActorID: actorID, Event: event, Details: string(b)}); err != nil {
+	e := &models.EventLog{TicketID: &ticketID, ActorID: &actor.UserID, Event: event, Details: string(b), SudoByID: actor.SudoByID}
+	if err := s.events.Append(e); err != nil {
 		s.log.Error("audit log write failed", "ticket_id", ticketID, "event", event, "err", err)
 	}
 }

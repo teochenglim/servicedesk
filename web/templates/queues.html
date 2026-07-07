@@ -13,6 +13,20 @@
   </div>
   <p class="muted">Parent: {{if .ParentID}}{{.ParentID}}{{else}}-{{end}} · Default priority: {{.DefaultPriority}} · Default category: {{.DefaultCategory}}</p>
 
+  <h4>SLA targets</h4>
+  {{$slaVals := index $.SLAMinutes .ID}}
+  {{if $.User.CanQueueOps}}
+  <form class="filters" method="post" action="/queues/{{.ID}}/sla">
+    <label>P1 (min)<input type="number" name="minutes_P1" min="1" value="{{index $slaVals "P1"}}" style="width:6rem;"></label>
+    <label>P2 (min)<input type="number" name="minutes_P2" min="1" value="{{index $slaVals "P2"}}" style="width:6rem;"></label>
+    <label>P3 (min)<input type="number" name="minutes_P3" min="1" value="{{index $slaVals "P3"}}" style="width:6rem;"></label>
+    <label>P4 (min)<input type="number" name="minutes_P4" min="1" value="{{index $slaVals "P4"}}" style="width:6rem;"></label>
+    <button class="secondary" type="submit">Save SLA targets</button>
+  </form>
+  {{else}}
+  <p class="muted">P1 {{index $slaVals "P1"}}m · P2 {{index $slaVals "P2"}}m · P3 {{index $slaVals "P3"}}m · P4 {{index $slaVals "P4"}}m</p>
+  {{end}}
+
   <h4>Engineers in this queue</h4>
   {{$queueID := .ID}}
   {{$members := index $.Members .ID}}

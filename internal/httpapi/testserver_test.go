@@ -89,14 +89,16 @@ func newTestEnv(t *testing.T) *testEnv {
 	engine := workflow.NewEngine(workflows, workflowTask, notes, tickets, approvals, hub, whDispatcher, mail, log)
 
 	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, log)
-	noteSvc := service.NewNoteService(notes, events, watchers, hub, whDispatcher, engine)
+	noteSvc := service.NewNoteService(notes, events, watchers, tickets, hub, whDispatcher, engine)
 	problemSvc := service.NewProblemService(problems, tags)
 	attachmentSvc := service.NewAttachmentService(attachments, notes, 10<<20)
+	queueSvc := service.NewQueueService(queues)
+	sudoSvc := service.NewSudoService(users, orgMembers, events, authMgr)
 
 	srv := NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers,
 		webhooks, workflows, workflowTask, approvals, customFields, events,
-		ticketSvc, noteSvc, problemSvc, attachmentSvc, engine, hub,
+		ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc, engine, hub,
 	)
 	srv.SetDB(gdb)
 

@@ -3,7 +3,6 @@ package httpapi
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"servicedesk/internal/auth"
 	"servicedesk/internal/models"
@@ -55,22 +54,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not issue token", http.StatusInternalServerError)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "sd_token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(12 * time.Hour),
-	})
-	http.Redirect(w, r, "/tickets", http.StatusSeeOther)
+	setSessionCookie(w, "sd_token", token)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
-		Name: "sd_token", Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
-	})
+	clearCookie(w, "sd_token")
+	clearCookie(w, sudoReturnCookie)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }

@@ -35,6 +35,13 @@ h3 { font-size: 1rem; }
   background: var(--tw-coral-500); color: #fff; font-size: 0.7rem; font-weight: 700;
   letter-spacing: 0.05em; padding: 0.2rem 0.55rem; border-radius: 999px;
 }
+
+/* --- Sudo-as persistent banner (DESIGN/02 §2.5): shown for the entire session --- */
+.sudo-banner {
+  background: var(--tw-amber-500); color: #1a1a1a; text-align: center;
+  padding: 0.4rem 1rem; font-size: 0.85rem; font-weight: 600;
+}
+.sudo-banner .link-btn { color: #1a1a1a; text-decoration: underline; font-weight: 600; margin-left: 0.5rem; }
 .topbar form[action="/admin/demo/reset"] .icon-btn {
   border: 1px solid rgba(255,255,255,0.35); border-radius: 8px; padding: 0.35rem 0.7rem; font-size: 0.8rem;
 }
@@ -121,6 +128,12 @@ h3 { font-size: 1rem; }
 .attachment-item { display: inline-block; margin: 0.4rem 0.4rem 0 0; }
 .attachment-thumb { max-width: 120px; max-height: 90px; border-radius: 8px; border: 1px solid var(--tw-border); object-fit: cover; }
 .attachment-file { display: inline-block; padding: 0.3rem 0.6rem; border-radius: 8px; background: var(--tw-surface-muted); font-size: 0.8rem; text-decoration: none; color: var(--tw-text-on-light); }
+
+/* --- Manager Activity List (DESIGN/08 §8.6): last message only, 3 lines max --- */
+.activity-message {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; margin: 0.4rem 0; opacity: 0.85;
+}
 
 /* --- conversation thread --- */
 .thread { display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0; }

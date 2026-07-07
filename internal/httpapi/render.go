@@ -50,12 +50,13 @@ func dict(pairs ...any) map[string]any {
 // caller has a models.Ticket value (list-row range) or a *models.Ticket
 // (detail pane's .Ticket field) - html/template can't overload by type, so
 // this type-switches instead of needing two differently-named template funcs.
-func stageProgressFunc(v any) stageBarData {
+// plain selects the jargon-free Customer wording (DESIGN/08 §8.4).
+func stageProgressFunc(v any, plain bool) stageBarData {
 	switch t := v.(type) {
 	case models.Ticket:
-		return stageProgress(&t, time.Now())
+		return stageProgress(&t, time.Now(), plain)
 	case *models.Ticket:
-		return stageProgress(t, time.Now())
+		return stageProgress(t, time.Now(), plain)
 	default:
 		return stageBarData{}
 	}

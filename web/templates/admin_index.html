@@ -1,16 +1,44 @@
 {{define "admin_index"}}
 {{template "header" .}}
-<h1>Admin</h1>
+<h1>System administration</h1>
+
 <div class="card">
-  <ul>
-    <li><a href="/admin/orgs">Organizations (multi-tenant)</a></li>
-    <li><a href="/admin/users">Users &amp; Roles</a></li>
-    <li><a href="/admin/webhooks">Webhooks</a></li>
-    <li><a href="/admin/workflows">Workflows &amp; Runbooks</a></li>
-    <li><a href="/admin/custom-fields">Custom Fields</a></li>
-    <li><a href="/queues">Queues</a></li>
-    <li><a href="/metrics">Prometheus metrics</a></li>
-  </ul>
+  <div class="actions" style="justify-content:space-between;">
+    <h3 style="margin:0;">Users ({{len .Users}})</h3>
+    <a class="btn secondary" href="/admin/users">+ Add user</a>
+  </div>
+  {{range .Users}}
+  <div class="actions" style="justify-content:space-between;">
+    <span>{{.Username}} &mdash; {{.Role}}</span>
+    <span>
+      <a class="link-btn" href="/admin/users">Edit &#9662;</a>
+      {{if ne .Role "SystemAdmin"}}
+      <form style="display:inline" method="post" action="/admin/users/{{.ID}}/sudo/start"><button class="link-btn" type="submit">Sudo as &#9662;</button></form>
+      {{end}}
+    </span>
+  </div>
+  {{else}}<p class="muted">No users yet.</p>{{end}}
 </div>
+
+<div class="card">
+  <h3>Recent audit events</h3>
+  {{range .RecentEvents}}
+  <div class="note">
+    <div class="meta">{{.CreatedAt.Format "2006-01-02 15:04"}} &middot; {{.ActorName}}{{if .SudoByName}} (sudo'd in by {{.SudoByName}}){{end}} &middot; {{.Event}}</div>
+    <code>{{.Details}}</code>
+  </div>
+  {{else}}<p class="muted">No audit events yet.</p>{{end}}
+</div>
+
+<div class="actions">
+  <a class="btn secondary" href="/admin/orgs">&#9881; Org settings</a>
+  <a class="btn secondary" href="/admin/webhooks">&#128274; Integrations</a>
+  <a class="btn secondary" href="/admin/audit">&#128203; Audit</a>
+</div>
+<p class="muted" style="margin-top:0.5rem;">
+  Also: <a href="/admin/workflows">Workflows &amp; Runbooks</a> &middot;
+  <a href="/admin/custom-fields">Custom Fields</a> &middot;
+  <a href="/metrics">Prometheus metrics</a>
+</p>
 {{template "footer" .}}
 {{end}}

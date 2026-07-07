@@ -1,5 +1,5 @@
 {{define "progress_bar"}}
-{{$bar := stageProgress .}}
+{{$bar := stageProgress .Ticket .Plain}}
 {{if $bar.Applicable}}
 <div class="stage-bar" data-current="{{$bar.CurrentIdx}}">
   {{range $i, $name := $bar.Stages}}

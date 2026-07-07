@@ -21,12 +21,19 @@ type stageBarData struct {
 	ReopenCount int
 }
 
+// stageNames/plainStageNames give the Detect/Ack/Mitigate/Resolve dots two
+// label sets: the technical one (Engineer/Manager/Agent) and a jargon-free
+// one for the Customer persona (DESIGN/08 §8.4 - "no Ack/Mitigate jargon").
+var stageNames = []string{"Detect", "Ack", "Mitigate", "Resolve"}
+var plainStageNames = []string{"Submitted", "In progress", "Fixing", "Resolved"}
+
 // stageProgress derives the current stage purely from which timestamp is
 // most recently set - it deliberately doesn't need special-case logic for
 // Reopen, because Transition already clears ResolvedAt (and never touches
 // AckedAt/MitigatedAt) on reopen, so the bar naturally recomputes back to
-// whichever of Ack/Mitigate is the latest non-nil milestone.
-func stageProgress(t *models.Ticket, now time.Time) stageBarData {
+// whichever of Ack/Mitigate is the latest non-nil milestone. plain switches
+// both the stage names and the label wording to the Customer-facing variant.
+func stageProgress(t *models.Ticket, now time.Time, plain bool) stageBarData {
 	// StatusRejected never actually rests as the persisted Status: statemachine.go's
 	// forcedNext cascades it straight to Closed within the same Transition call
 	// (see TransitionError/forcedNext), so "was this ticket rejected" has to be
@@ -47,22 +54,38 @@ func stageProgress(t *models.Ticket, now time.Time) stageBarData {
 		label = "Resolved " + humanDuration(now.Sub(*t.ResolvedAt)) + " ago"
 	case t.MitigatedAt != nil:
 		idx = 2
-		label = "Mitigated " + humanDuration(now.Sub(*t.MitigatedAt)) + " ago · working on root cause"
+		if plain {
+			label = "A fix is in place, " + humanDuration(now.Sub(*t.MitigatedAt)) + " ago — confirming it's fully resolved"
+		} else {
+			label = "Mitigated " + humanDuration(now.Sub(*t.MitigatedAt)) + " ago · working on root cause"
+		}
 	case t.AckedAt != nil:
 		idx = 1
-		label = humanDuration(now.Sub(*t.AckedAt)) + " since ack"
+		if plain {
+			label = "Being looked at for " + humanDuration(now.Sub(*t.AckedAt))
+		} else {
+			label = humanDuration(now.Sub(*t.AckedAt)) + " since ack"
+		}
 	default:
 		idx = 0
 		since := t.CreatedAt
 		if t.DetectedAt != nil {
 			since = *t.DetectedAt
 		}
-		label = humanDuration(now.Sub(since)) + " (waiting for ack)"
+		if plain {
+			label = "Submitted " + humanDuration(now.Sub(since)) + " ago — waiting for someone to pick it up"
+		} else {
+			label = humanDuration(now.Sub(since)) + " (waiting for ack)"
+		}
 	}
 
+	stages := stageNames
+	if plain {
+		stages = plainStageNames
+	}
 	return stageBarData{
 		Applicable:  true,
-		Stages:      []string{"Detect", "Ack", "Mitigate", "Resolve"},
+		Stages:      stages,
 		CurrentIdx:  idx,
 		Closed:      t.Status == models.StatusClosed,
 		StageLabel:  label,

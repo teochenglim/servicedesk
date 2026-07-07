@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ func TestStageProgress_Detect(t *testing.T) {
 	created := now.Add(-30 * time.Minute)
 	tk := &models.Ticket{Status: models.StatusNew, CreatedAt: created, DetectedAt: &created}
 
-	bar := stageProgress(tk, now)
+	bar := stageProgress(tk, now, false)
 	if !bar.Applicable || bar.CurrentIdx != 0 {
 		t.Fatalf("expected Detect stage (idx 0), got %+v", bar)
 	}
@@ -29,12 +30,12 @@ func TestStageProgress_AckMitigateResolve(t *testing.T) {
 	resolved := now.Add(-10 * time.Minute)
 
 	ackOnly := &models.Ticket{Status: models.StatusInProgress, DetectedAt: &detected, AckedAt: &acked}
-	if bar := stageProgress(ackOnly, now); bar.CurrentIdx != 1 {
+	if bar := stageProgress(ackOnly, now, false); bar.CurrentIdx != 1 {
 		t.Errorf("Ack-only ticket: CurrentIdx = %d, want 1", bar.CurrentIdx)
 	}
 
 	mitigatedTk := &models.Ticket{Status: models.StatusInProgress, DetectedAt: &detected, AckedAt: &acked, MitigatedAt: &mitigated}
-	if bar := stageProgress(mitigatedTk, now); bar.CurrentIdx != 2 {
+	if bar := stageProgress(mitigatedTk, now, false); bar.CurrentIdx != 2 {
 		t.Errorf("Mitigated ticket: CurrentIdx = %d, want 2", bar.CurrentIdx)
 	}
 
@@ -42,7 +43,7 @@ func TestStageProgress_AckMitigateResolve(t *testing.T) {
 		Status: models.StatusResolved, DetectedAt: &detected, AckedAt: &acked,
 		MitigatedAt: &mitigated, ResolvedAt: &resolved,
 	}
-	bar := stageProgress(resolvedTk, now)
+	bar := stageProgress(resolvedTk, now, false)
 	if bar.CurrentIdx != 3 {
 		t.Errorf("Resolved ticket: CurrentIdx = %d, want 3", bar.CurrentIdx)
 	}
@@ -52,7 +53,7 @@ func TestStageProgress_AckMitigateResolve(t *testing.T) {
 
 	closedTk := resolvedTk
 	closedTk.Status = models.StatusClosed
-	if bar := stageProgress(closedTk, now); !bar.Closed || bar.CurrentIdx != 3 {
+	if bar := stageProgress(closedTk, now, false); !bar.Closed || bar.CurrentIdx != 3 {
 		t.Errorf("Closed ticket: got %+v, want Closed=true CurrentIdx=3", bar)
 	}
 }
@@ -70,13 +71,13 @@ func TestStageProgress_ReopenResetsToLatestMilestone(t *testing.T) {
 	reopenedAfterMitigate := &models.Ticket{
 		Status: models.StatusInProgress, AckedAt: &acked, MitigatedAt: &mitigated, ReopenCount: 1,
 	}
-	if bar := stageProgress(reopenedAfterMitigate, now); bar.CurrentIdx != 2 {
+	if bar := stageProgress(reopenedAfterMitigate, now, false); bar.CurrentIdx != 2 {
 		t.Errorf("reopened-after-mitigate: CurrentIdx = %d, want 2 (Mitigate)", bar.CurrentIdx)
 	}
 
 	// Reopened before ever being mitigated.
 	reopenedAfterAckOnly := &models.Ticket{Status: models.StatusInProgress, AckedAt: &acked, ReopenCount: 1}
-	if bar := stageProgress(reopenedAfterAckOnly, now); bar.CurrentIdx != 1 {
+	if bar := stageProgress(reopenedAfterAckOnly, now, false); bar.CurrentIdx != 1 {
 		t.Errorf("reopened-after-ack-only: CurrentIdx = %d, want 1 (Ack)", bar.CurrentIdx)
 	}
 }
@@ -88,15 +89,34 @@ func TestStageProgress_ReopenResetsToLatestMilestone(t *testing.T) {
 func TestStageProgress_RejectedHasNoBar(t *testing.T) {
 	acked := time.Now().Add(-time.Hour)
 	rejected := &models.Ticket{Status: models.StatusClosed, AckedAt: &acked, ResolvedAt: nil}
-	if bar := stageProgress(rejected, time.Now()); bar.Applicable {
+	if bar := stageProgress(rejected, time.Now(), false); bar.Applicable {
 		t.Errorf("rejected-then-closed ticket should not be Applicable: %+v", bar)
 	}
 
 	// A genuinely resolved-then-closed ticket must still show the bar.
 	resolved := time.Now().Add(-time.Minute)
 	confirmedClosed := &models.Ticket{Status: models.StatusClosed, AckedAt: &acked, ResolvedAt: &resolved}
-	if bar := stageProgress(confirmedClosed, time.Now()); !bar.Applicable {
+	if bar := stageProgress(confirmedClosed, time.Now(), false); !bar.Applicable {
 		t.Error("resolved-then-closed ticket should still show the bar")
+	}
+}
+
+// TestStageProgress_PlainDropsJargon covers DESIGN/08 §8.4: the Customer-facing
+// variant must not surface "Ack"/"Mitigate" wording anywhere in the stage
+// names or the label.
+func TestStageProgress_PlainDropsJargon(t *testing.T) {
+	now := time.Now()
+	acked := now.Add(-time.Hour)
+	tk := &models.Ticket{Status: models.StatusInProgress, AckedAt: &acked}
+
+	bar := stageProgress(tk, now, true)
+	for _, name := range bar.Stages {
+		if name == "Ack" || name == "Mitigate" {
+			t.Errorf("plain stage names must not contain jargon, got %v", bar.Stages)
+		}
+	}
+	if strings.Contains(strings.ToLower(bar.StageLabel), "ack") {
+		t.Errorf("plain label must not mention ack: %q", bar.StageLabel)
 	}
 }
 

@@ -1,0 +1,32 @@
+{{define "manager_activity"}}
+{{template "header" .}}
+<div class="actions" style="justify-content:space-between;">
+  <h1>Activity list</h1>
+  <a class="btn secondary" href="/manager">&#8646; Dashboard</a>
+</div>
+
+{{range $row := .Rows}}
+<div class="card">
+  <div class="actions" style="justify-content:space-between;">
+    <h3 style="margin:0;"><a href="/tickets/{{.Ticket.ID}}">#{{.Ticket.ID}} {{.Ticket.Title}}</a></h3>
+    {{template "progress_bar" (dict "Ticket" .Ticket "Plain" false)}}
+  </div>
+  <p class="muted">{{.AssigneeStr}} · {{.QueueName}} · <span class="badge prio-{{.Ticket.Priority}}">{{.Ticket.Priority}}</span></p>
+  {{if .LastMessage}}
+  <div class="activity-message">{{.LastMessage}}</div>
+  <p class="muted">&mdash; {{.LastAuthor}}{{if .LastAt}}, {{.LastAt.Format "2006-01-02 15:04"}}{{end}}</p>
+  {{else}}
+  <p class="muted">No notes yet.</p>
+  {{end}}
+  <form class="actions" method="post" action="/tickets/{{.Ticket.ID}}/assign">
+    <select name="assignee_id" style="width:auto;">
+      {{range $.Agents}}<option value="{{.ID}}" {{if assignedTo $row.Ticket.AssigneeID .ID}}selected{{end}}>{{.Username}} ({{.Role}})</option>{{end}}
+    </select>
+    <button class="secondary" type="submit">Transfer</button>
+  </form>
+</div>
+{{else}}
+<p class="muted">No open tickets right now.</p>
+{{end}}
+{{template "footer" .}}
+{{end}}

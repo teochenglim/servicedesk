@@ -32,3 +32,15 @@ func (r *NoteRepo) ListByTicket(ticketID int64, includeInternal bool) ([]models.
 	err := q.Order("created_at ASC").Find(&notes).Error
 	return notes, err
 }
+
+// ListForTickets returns every note across the given tickets, oldest first,
+// so a caller can reduce it to "latest note per ticket" (the Manager Activity
+// List's "last message" preview, DESIGN/08 §8.6) without one query per ticket.
+func (r *NoteRepo) ListForTickets(ticketIDs []int64) ([]models.Note, error) {
+	if len(ticketIDs) == 0 {
+		return nil, nil
+	}
+	var notes []models.Note
+	err := r.db.Where("ticket_id IN ?", ticketIDs).Order("created_at ASC").Find(&notes).Error
+	return notes, err
+}

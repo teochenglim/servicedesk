@@ -9,13 +9,18 @@
 
 {{define "ticket_list_pane"}}
 <div class="ticket-list-pane">
+  {{if eq .User.Role "Customer"}}
+  <div style="padding:0.75rem 1rem 0;">
+    <a class="btn" href="/tickets/new" style="display:block; width:100%; text-align:center; font-size:1.1rem;">+ Submit a ticket</a>
+  </div>
+  {{end}}
   <div class="actions" style="justify-content:space-between; padding:0.75rem 1rem 0;">
     <h3 style="margin:0;">Tickets</h3>
   </div>
   <div class="filters" style="padding:0 1rem;">
     <a class="btn {{if not .View}}secondary{{end}}" href="/tickets">All</a>
     <a class="btn secondary" href="/tickets?view=mine-created">Mine</a>
-    <a class="btn secondary" href="/tickets?view=mine-assigned">Assigned</a>
+    {{if not (eq .User.Role "Customer")}}<a class="btn secondary" href="/tickets?view=mine-assigned">Assigned</a>{{end}}
     {{if .User.Role.IsAgent}}<a class="btn secondary" href="/tickets?view=my-queues">Pickup</a>{{end}}
     <a class="btn secondary" href="/tickets?view=watched">Watched</a>
   </div>
@@ -43,9 +48,9 @@
      hx-get="/tickets/{{.ID}}" hx-select="#ticket-detail-pane" hx-target="#ticket-detail-pane"
      hx-swap="outerHTML" hx-push-url="true">
     <div class="subject">#{{.ID}} {{.Title}}</div>
-    <div class="row-meta">{{.Status}} · Queue {{.QueueID}}</div>
+    <div class="row-meta">{{.Status}}{{if not (eq $.User.Role "Customer")}} · Queue {{.QueueID}}{{end}}</div>
     {{if .SLADueAt}}<span class="sla-chip {{slaState .SLADueAt}}">{{slaLabel .SLADueAt}}</span>{{end}}
-    {{template "progress_bar" .}}
+    {{template "progress_bar" (dict "Ticket" . "Plain" (eq $.User.Role "Customer"))}}
   </a>
   {{else}}
   <p class="muted" style="padding:0 1rem;">No tickets found.</p>
@@ -62,13 +67,16 @@
     <h1>#{{.Ticket.ID}} {{.Ticket.Title}} <span id="live-badge" class="badge" data-status="New">live</span></h1>
     <span class="badge" data-status="{{.Ticket.Status}}">{{.Ticket.Status}}</span>
   </div>
-  {{template "progress_bar" .Ticket}}
+  {{template "progress_bar" (dict "Ticket" .Ticket "Plain" (eq .User.Role "Customer"))}}
+  {{if eq .User.Role "Customer"}}{{with .Notes}}{{$last := index . (add (len .) -1)}}{{if not $last.Internal}}
+  <p class="muted" style="font-style:italic;">&ldquo;{{$last.Body}}&rdquo; — {{$last.CreatedAt.Format "2006-01-02 15:04"}}</p>
+  {{end}}{{end}}{{end}}
   <button type="button" class="details-chip" x-data x-on:click="$dispatch('open-details')">Details</button>
 
   <div class="ticket-columns" x-data="{ detailsOpen: false }" x-on:open-details.window="detailsOpen = true">
     <div>
       <div class="card">
-        <p class="muted">Queue {{.Ticket.QueueID}} · Category {{.Ticket.Category}} · <span class="badge prio-{{.Ticket.Priority}}">{{.Ticket.Priority}}</span></p>
+        <p class="muted">{{if .User.Role.IsAgent}}Queue {{.Ticket.QueueID}} · {{end}}Category {{.Ticket.Category}} · <span class="badge prio-{{.Ticket.Priority}}">{{.Ticket.Priority}}</span></p>
         <div>{{markdown .Ticket.Description}}</div>
 
         <div class="actions">
@@ -81,13 +89,18 @@
             <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="resolve"><button class="primary" type="submit">Resolve</button></form>
             <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reject"><button class="danger" type="submit">Reject</button></form>
           {{end}}
-          {{end}}
           {{if eq .Ticket.Status "Resolved"}}
             <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="confirm"><button class="primary" type="submit">Confirm and close</button></form>
             <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reopen"><button class="secondary" type="submit">Reopen</button></form>
           {{end}}
           {{if eq .Ticket.Status "Closed"}}
             <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reopen"><button class="secondary" type="submit">Reopen</button></form>
+          {{end}}
+          {{else}}
+          <!-- Customer: Close/Reopen are always offered regardless of status (DESIGN/08 §8.4) -
+               the state machine still legitimately rejects an illegal transition server-side. -->
+          <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="confirm"><button class="primary" type="submit">Close ticket</button></form>
+          <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reopen"><button class="secondary" type="submit">Reopen</button></form>
           {{end}}
           {{if .Watching}}
             <form method="post" action="/tickets/{{.Ticket.ID}}/unwatch"><button class="secondary" type="submit">Unwatch</button></form>
@@ -201,6 +214,7 @@
         <button type="button" class="link-btn" x-on:click="detailsOpen = false" :style="detailsOpen ? '' : 'display:none'">Close</button>
       </div>
 
+      {{if .User.Role.IsAgent}}
       <div class="card">
         <h3>Labels</h3>
         {{range .Tags}}
@@ -208,14 +222,13 @@
           <form style="display:inline" method="post" action="/tickets/{{$.Ticket.ID}}/labels/{{.ID}}/delete"><button class="link-btn" type="submit">&times;</button></form>
         </span>
         {{else}}<p class="muted">No labels.</p>{{end}}
-        {{if .User.Role.IsAgent}}
         <form class="stacked" method="post" action="/tickets/{{.Ticket.ID}}/labels">
           <input type="text" name="name" placeholder="label name" required>
           <select name="kind"><option value="incident">Incident</option><option value="rca">RCA</option></select>
           <div class="actions"><button class="secondary" type="submit">Add label</button></div>
         </form>
-        {{end}}
       </div>
+      {{end}}
 
       {{if .User.CanQueueOps}}
       <div class="card">
@@ -240,12 +253,14 @@
       </div>
       {{end}}
 
+      {{if .User.Role.IsAgent}}
       <div class="card">
         <h3>Audit Trail</h3>
         {{range .Events}}
         <div class="note"><div class="meta">{{.CreatedAt.Format "2006-01-02 15:04"}} · {{.Event}}</div><code>{{.Details}}</code></div>
         {{else}}<p class="muted">No events.</p>{{end}}
       </div>
+      {{end}}
     </div>
     <div class="sheet-backdrop" x-show="detailsOpen" x-on:click="detailsOpen = false"></div>
   </div>

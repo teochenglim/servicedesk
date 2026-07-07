@@ -1,15 +1,127 @@
 package httpapi
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"servicedesk/internal/auth"
+	"servicedesk/internal/middleware"
 	"servicedesk/internal/models"
+	"servicedesk/internal/repo"
 )
 
+// auditRow adds display-friendly actor/sudo-by usernames to a raw EventLog
+// row, for both the admin home's "recent audit events" and the full
+// /admin/audit view (DESIGN/08 §8.3).
+type auditRow struct {
+	models.EventLog
+	ActorName  string
+	SudoByName string
+}
+
+func (s *Server) auditRows(events []models.EventLog) []auditRow {
+	users, err := s.users.List()
+	if err != nil {
+		s.log.Error("audit: load user names failed", "err", err)
+	}
+	names := make(map[int64]string, len(users))
+	for _, u := range users {
+		names[u.ID] = u.Username
+	}
+	rows := make([]auditRow, len(events))
+	for i, e := range events {
+		row := auditRow{EventLog: e}
+		if e.ActorID != nil {
+			row.ActorName = names[*e.ActorID]
+		}
+		if e.SudoByID != nil {
+			row.SudoByName = names[*e.SudoByID]
+		}
+		rows[i] = row
+	}
+	return rows
+}
+
+type adminIndexData struct {
+	baseData
+	Users        []models.User
+	RecentEvents []auditRow
+}
+
+// handleAdminIndex is ServiceDeskAdmin's short home screen (DESIGN/08 §8.3):
+// people and recent system activity, not operational/ticket noise - that
+// belongs to Manager (/manager) and Engineer (/tickets).
 func (s *Server) handleAdminIndex(w http.ResponseWriter, r *http.Request) {
-	s.render.Render(w, "admin_index", s.base(r, "Admin"))
+	users, err := s.users.List()
+	if err != nil {
+		s.log.Error("admin index: list users failed", "err", err)
+	}
+	events, err := s.events.ListAudit(repo.AuditFilter{Limit: 10})
+	if err != nil {
+		s.log.Error("admin index: load recent audit events failed", "err", err)
+	}
+	s.render.Render(w, "admin_index", adminIndexData{
+		baseData: s.base(r, "Admin"), Users: users, RecentEvents: s.auditRows(events),
+	})
+}
+
+type auditLogData struct {
+	baseData
+	Events   []auditRow
+	Filter   repo.AuditFilter
+	ActorRaw string
+}
+
+// handleAuditLog is the full searchable/exportable system audit log
+// (DESIGN/08 §8.3): filters by actor, event substring, and sudo-only, with a
+// CSV export (?format=csv) alongside the normal HTML view.
+func (s *Server) handleAuditLog(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := repo.AuditFilter{Event: q.Get("event"), SudoOnly: q.Get("sudo_only") == "on", Limit: 500}
+	actorRaw := q.Get("actor_id")
+	if actorRaw != "" {
+		if id, err := strconv.ParseInt(actorRaw, 10, 64); err == nil {
+			f.ActorID = &id
+		}
+	}
+	events, err := s.events.ListAudit(f)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rows := s.auditRows(events)
+
+	if q.Get("format") == "csv" {
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", `attachment; filename="audit.csv"`)
+		cw := csv.NewWriter(w)
+		_ = cw.Write([]string{"created_at", "event", "actor_id", "actor_username", "sudo_by_id", "sudo_by_username", "ticket_id", "details"})
+		for _, row := range rows {
+			ticketID := ""
+			if row.TicketID != nil {
+				ticketID = strconv.FormatInt(*row.TicketID, 10)
+			}
+			actorID, sudoByID := "", ""
+			if row.ActorID != nil {
+				actorID = strconv.FormatInt(*row.ActorID, 10)
+			}
+			if row.SudoByID != nil {
+				sudoByID = strconv.FormatInt(*row.SudoByID, 10)
+			}
+			_ = cw.Write([]string{
+				row.CreatedAt.Format("2006-01-02 15:04:05"), row.Event, actorID, row.ActorName,
+				sudoByID, row.SudoByName, ticketID, row.Details,
+			})
+		}
+		cw.Flush()
+		return
+	}
+
+	s.render.Render(w, "admin_audit", auditLogData{
+		baseData: s.base(r, "Audit"), Events: rows, Filter: f, ActorRaw: actorRaw,
+	})
 }
 
 type webhooksData struct {
@@ -140,6 +252,40 @@ func (s *Server) handleUserCreate(w http.ResponseWriter, r *http.Request) {
 		users, _ := s.users.List()
 		s.render.Render(w, "admin_users", usersData{baseData: s.base(r, "Users"), Users: users, Roles: allRoles, Error: err.Error()})
 		return
+	}
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// handleUserRoleUpdate changes a user's role (DESIGN/08 §8.3's "set/change
+// user roles"), audit-logged so it shows up in the recent-events feed the
+// same way a sudo session does - this is exactly the kind of change that
+// screen exists to surface.
+func (s *Server) handleUserRoleUpdate(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	newRole := models.Role(r.FormValue("role"))
+	target, err := s.users.GetByID(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	oldRole := target.Role
+	if err := s.users.UpdateRole(id, newRole); err != nil {
+		s.log.Error("users: update role failed", "user_id", id, "role", newRole, "err", err)
+		http.Error(w, "could not update role", http.StatusInternalServerError)
+		return
+	}
+	claims := middleware.ClaimsFrom(r.Context())
+	details, _ := json.Marshal(map[string]any{"user_id": id, "username": target.Username, "from": oldRole, "to": newRole})
+	if err := s.events.Append(&models.EventLog{ActorID: &claims.UserID, Event: "role_changed", Details: string(details), SudoByID: claims.SudoByID}); err != nil {
+		s.log.Error("users: audit log for role change failed", "user_id", id, "err", err)
 	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }

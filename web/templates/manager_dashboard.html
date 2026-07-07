@@ -1,0 +1,41 @@
+{{define "manager_dashboard"}}
+{{template "header" .}}
+<div class="actions" style="justify-content:space-between;">
+  <h1>Manager dashboard</h1>
+  <span class="actions">
+    <a class="btn secondary" href="/admin/custom-fields">Custom Fields</a>
+    <a class="btn secondary" href="/manager/activity">Activity list &#8646;</a>
+  </span>
+</div>
+
+<div class="card">
+  <h3>Queues</h3>
+  <div class="grid-2" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+  {{range .QueueStats}}
+  <div>
+    <strong>{{.Name}}</strong>
+    <p class="muted">{{.Open}} open{{if gt .Breaching 0}} · <span class="sla-chip breach">{{.Breaching}} breaching</span>{{else}} · 0 breaching{{end}}</p>
+  </div>
+  {{else}}
+  <p class="muted">No queues yet.</p>
+  {{end}}
+  </div>
+</div>
+
+<div class="card">
+  <h3>Engineer load</h3>
+  {{range .EngineerLoads}}
+  <div class="actions" style="justify-content:space-between;">
+    <span>{{.Username}} — {{.Load}} active{{if .Overloaded}} <span class="reopen-tag">&#9888; overloaded</span>{{end}}</span>
+  </div>
+  {{else}}
+  <p class="muted">No engineers on staff yet.</p>
+  {{end}}
+</div>
+
+<div class="card">
+  <h3>MTTx</h3>
+  <p class="muted">MTTD {{.MTTx.MTTD}} · MTTA {{.MTTx.MTTA}} · MTTM {{.MTTx.MTTM}} · MTTR {{.MTTx.MTTR}}</p>
+</div>
+{{template "footer" .}}
+{{end}}

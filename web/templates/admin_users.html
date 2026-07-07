@@ -11,15 +11,31 @@
 {{end}}
 <div class="card">
 <table>
-  <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Source</th><th></th></tr></thead>
+  <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Source</th><th></th><th></th></tr></thead>
   <tbody>
   {{range .Users}}
     <tr>
-      <td>{{.ID}}</td><td>{{.Username}}</td><td>{{.Email}}</td><td>{{.Role}}</td><td>{{.Source}}</td>
+      <td>{{.ID}}</td><td>{{.Username}}</td><td>{{.Email}}</td>
+      <td>
+        <form style="display:inline" method="post" action="/admin/users/{{.ID}}/role" onsubmit="return confirm('Change {{.Username}}\'s role?')">
+          <select name="role" style="width:auto; display:inline-block;">
+            {{$role := .Role}}{{range $.Roles}}<option value="{{.}}" {{if eq . $role}}selected{{end}}>{{.}}</option>{{end}}
+          </select>
+          <button class="link-btn" type="submit">Change</button>
+        </form>
+      </td>
+      <td>{{.Source}}</td>
       <td>
         {{if eq .Role "Agent"}}
         <form style="display:inline" method="post" action="/admin/users/{{.ID}}/api-token" onsubmit="return confirm('Issue a new API token for {{.Username}}? Any existing token stops working immediately.')">
           <button class="link-btn" type="submit">Issue API token</button>
+        </form>
+        {{end}}
+      </td>
+      <td>
+        {{if ne .Role "SystemAdmin"}}
+        <form style="display:inline" method="post" action="/admin/users/{{.ID}}/sudo/start">
+          <button class="link-btn" type="submit">Sudo as</button>
         </form>
         {{end}}
       </td>

@@ -1,6 +1,8 @@
 package repo
 
 import (
+	"time"
+
 	"gorm.io/gorm"
 
 	"servicedesk/internal/models"
@@ -24,6 +26,14 @@ func (r *TicketRepo) Get(id int64) (*models.Ticket, error) {
 
 func (r *TicketRepo) Update(t *models.Ticket) error {
 	return r.db.Save(t).Error
+}
+
+// TouchUpdatedAt bumps a ticket's UpdatedAt without a full read-modify-write -
+// used by note creation so the Manager Activity List's "most recently
+// updated" ordering (DESIGN/08 §8.6) reflects a new note too, not just
+// status/assignment/mitigation changes that already go through Update.
+func (r *TicketRepo) TouchUpdatedAt(id int64) error {
+	return r.db.Model(&models.Ticket{}).Where("id = ?", id).Update("updated_at", time.Now()).Error
 }
 
 // ListFilter drives the advanced filters + saved views from the PRD (3.7).
