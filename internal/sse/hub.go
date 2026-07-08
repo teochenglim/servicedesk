@@ -22,6 +22,7 @@ type Message struct {
 type Hub struct {
 	mu          sync.Mutex
 	subscribers map[int64]map[chan Message]struct{}
+	closing     chan struct{}
 
 	watchers *repo.WatcherRepo
 	tickets  *repo.TicketRepo
@@ -30,9 +31,19 @@ type Hub struct {
 func NewHub(watchers *repo.WatcherRepo, tickets *repo.TicketRepo) *Hub {
 	return &Hub{
 		subscribers: make(map[int64]map[chan Message]struct{}),
+		closing:     make(chan struct{}),
 		watchers:    watchers,
 		tickets:     tickets,
 	}
+}
+
+// Close signals every active Handler stream to return immediately. http.Server.Shutdown
+// only waits for handlers to return on their own - it never cancels an in-flight request's
+// context - so a long-lived SSE connection would otherwise hold the drain open until the
+// caller's shutdown timeout expires (see RELEASE/v_3.0.9.md). Call this before
+// httpSrv.Shutdown so the drain returns as soon as streams notice, not after the timeout.
+func (h *Hub) Close() {
+	close(h.closing)
 }
 
 func (h *Hub) subscribe(userID int64) (chan Message, func()) {
@@ -108,6 +119,8 @@ func (h *Hub) Handler(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
+			return
+		case <-h.closing:
 			return
 		case <-ticker.C:
 			fmt.Fprint(w, ": keepalive\n\n")

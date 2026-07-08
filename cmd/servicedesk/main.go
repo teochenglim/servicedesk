@@ -172,6 +172,11 @@ func main() {
 	<-ctx.Done()
 	log.Info("shutdown: signal received, draining connections")
 
+	// Unblock any live SSE streams before calling Shutdown: it only waits for handlers
+	// to return on their own and never cancels their request contexts, so open /events
+	// connections would otherwise hold the drain open for the full timeout below.
+	hub.Close()
+
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer shutdownCancel()
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {

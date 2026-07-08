@@ -40,6 +40,10 @@ Two independent poll loops run per process (`cmd/servicedesk/main.go` spawns `cf
 
 Both `ProcessOne()` methods are exported specifically so integration tests can call them synchronously instead of racing a timer (`internal/httpapi/integration_test.go` does this for the Runbook and webhook tests).
 
+## Shutdown
+
+`cmd/servicedesk/main.go` calls `httpSrv.Shutdown(shutdownCtx)` on SIGINT/SIGTERM, capped at a 15s timeout. `Shutdown` never cancels an in-flight request's context — it only stops accepting new connections and waits for active handlers to return on their own. Any handler that blocks on `r.Context().Done()` in a loop (the SSE stream in `internal/sse/hub.go`'s `Handler`) only unblocks when the client disconnects, so a single open `/events` connection holds the drain open for the full timeout otherwise. `Hub.Close()` closes a `closing` channel the handler also selects on, and `main.go` calls it right before `httpSrv.Shutdown` so streams return immediately instead of waiting it out (see RELEASE/v_3.0.9.md). Any future long-lived streaming handler needs the same treatment — don't rely on `r.Context().Done()` alone to be canceled at shutdown.
+
 ## Multi-database support
 
 `internal/db/db.go` picks a GORM dialector (`sqlite`/`mysql`/`postgres`) and runs `AutoMigrate` against the structs in `internal/models`. GORM handles placeholder style and generated-ID retrieval uniformly; the repo layer only branches by dialect for the handful of things GORM can't express — see [DESIGN/06](DESIGN/06_design_technical_architecture.md) §6.3 for the specifics (full-text search, `next_run_at` as Unix epoch, MySQL index-length on `TEXT` columns).

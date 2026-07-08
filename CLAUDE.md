@@ -53,7 +53,6 @@ up-postgres / down-postgres  Start/stop the PostgreSQL-backed stack
 k8s-apply / k8s-delete       Apply/delete the k8s/ manifests
 k8s-logs       Tail logs from the servicedesk deployment in k8s
 version        Print the version currently in VERSION
-bump           Rewrite the VERSION file (VERSION=x.y.z required)
 tag            Create and push a git tag for the current VERSION
 release        Bump, commit, tag, push - triggers GitHub Actions (VERSION=x.y.z required)
 ```
@@ -62,7 +61,7 @@ release        Bump, commit, tag, push - triggers GitHub Actions (VERSION=x.y.z 
 
 **If a change touches `web/static/js` or a vendored frontend library, `go test`/`curl` smoke-testing it is not enough** — neither one executes client-side JS, so a bug purely in `app.js` or a vendored bundle (a markdown editor that never actually mounts, an SSE stream that silently never delivers) looks completely fine from the server side: the HTML is correct, the mount point is right there in the markup, nothing server-side ever fails. Two bugs exactly like this shipped unnoticed until a live user hit them (RELEASE/v_3.0.6.md, RELEASE/v_3.0.7.md). Verify with an actual browser executing the page: `make demo` in one terminal, then drive it headlessly with Playwright's Python bindings (already available on this machine as the system Python's `playwright` package, not an npm one — invoke via `/opt/homebrew/opt/python@3.12/bin/python3.12`, `sync_playwright()`, `page.on("pageerror", ...)` to catch JS exceptions the rendered HTML would never reveal).
 
-**Before ending a task**: if the change affects behavior, update the relevant doc(s) — [DESIGN.md](DESIGN.md)/[DESIGN/](DESIGN/) if it changes *what*/*why* the system does something, [ARCHITECTURE.md](ARCHITECTURE.md) if it changes *how* the code is organized or adds a durable gotcha future work should know about, and always [RELEASE.md](RELEASE.md) (newest entry first) + a new `RELEASE/v_x.y.z.md` for what shipped. Bump [VERSION](VERSION) (`make bump VERSION=x.y.z`) alongside it. Don't wait to be asked for each one separately. Then close out with a 1-line git commit message summarizing the change (the user commits it themselves — don't run `git commit` unless explicitly asked).
+**Before ending a task**: if the change affects behavior, update the relevant doc(s) — [DESIGN.md](DESIGN.md)/[DESIGN/](DESIGN/) if it changes *what*/*why* the system does something, [ARCHITECTURE.md](ARCHITECTURE.md) if it changes *how* the code is organized or adds a durable gotcha future work should know about, and always [RELEASE.md](RELEASE.md) (newest entry first) + a new `RELEASE/v_x.y.z.md` for what shipped. Don't wait to be asked for each one separately. Then close out with a 1-line git commit message summarizing the change (the user commits it themselves — don't run `git commit` or `git bump` unless explicitly asked).
 
 ## CI/CD
 
