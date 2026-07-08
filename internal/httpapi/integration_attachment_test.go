@@ -79,7 +79,10 @@ func TestAttachment_UploadDownloadAndCustomerPrivacy(t *testing.T) {
 	}
 }
 
-// TestAttachment_RejectsDisallowedType covers the upload-time allowlist.
+// TestAttachment_RejectsDisallowedType covers the upload-time allowlist. A
+// rejected upload redirects back to the ticket page with an inline error
+// banner (RELEASE/v_3.0.4.md) rather than a bare error page, so postFile's
+// followed-redirect response lands back on the (200) ticket page.
 func TestAttachment_RejectsDisallowedType(t *testing.T) {
 	env := newTestEnv(t)
 	admin := env.client()
@@ -88,8 +91,17 @@ func TestAttachment_RejectsDisallowedType(t *testing.T) {
 		"title": {"x"}, "description": {"d"}, "queue_id": {"1"}, "priority": {"P3"}, "category": {"x"},
 	})
 	resp := admin.postFile("/tickets/1/attachments", "malware.exe", []byte("MZ-fake-binary"))
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("uploading a .exe: got %d, want 400", resp.StatusCode)
+	body := bodyString(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("uploading a .exe: got %d after following the redirect back to the ticket page", resp.StatusCode)
+	}
+	if !strings.Contains(body, "file type not allowed") {
+		t.Fatalf("expected the ticket page to show why the upload was rejected, got body: %s", body)
+	}
+	// The disallowed upload must not have actually been stored.
+	dl := admin.get("/attachments/1")
+	dl.Body.Close()
+	if dl.StatusCode != http.StatusNotFound {
+		t.Fatalf("disallowed upload should not have been stored, download got %d", dl.StatusCode)
 	}
 }

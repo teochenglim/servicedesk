@@ -97,7 +97,7 @@ Home screen layout:
 │ My tickets                           │
 │ #1042 Payment gateway timeout        │
 │ Detect ●───○───○───○  Submitted 2h ago│
-│         [View] [Add note] [Close]    │
+│         [View] [Add note]            │
 ├─────────────────────────────────────┤
 │ #1030 Login issue                    │
 │ Resolve ○───○───○───●                │
@@ -111,7 +111,7 @@ Redesign decisions:
 
 - Submit is the loudest element on the screen, full-width, top of page. Everything else is secondary to a Customer.
 - The progress bar for this persona drops technical language: no "Ack/Mitigate" jargon overload, just plain-English state + a one-line note quoting (paraphrased) the engineer's last external note, if any.
-- Close, Reopen, and Add note are always visible on every ticket, in any state — never gated behind "only when Resolved." A Customer should be able to close a ticket early ("actually it's fine now"), reopen a Closed one that broke again, or add a note at any time without hunting for when the button decides to appear. Buttons that don't make sense yet (e.g. Reopen on a ticket that's still open) are simply not relevant that state, but they're never disabled-and-hidden as a trap — the state machine ([03](03_design_functional_requirements.md) §3.1.2) still legitimately rejects an illegal transition server-side.
+- Add note is always visible on every ticket, in any state. Close ticket and Reopen, by contrast, are only shown when they're a legal next move for the ticket's current status (Close ticket only once Resolved; Reopen only once Resolved or Closed) — RELEASE/v_3.0.4.md reversed this section's original "always show both, never gate behind status" call after real customer feedback that seeing a Reopen button on a brand-new ticket read as broken, not as flexibility. The state machine ([03](03_design_functional_requirements.md) §3.1.2) still rejects an illegal transition server-side regardless of what the UI offers.
 - The problem description field (on submission) and every note support rich text: Markdown with a raw/rendered toggle, including fenced code blocks (§8.7). A Customer pasting an error message or a config snippet gets it rendered as code, not mangled into a single paragraph — this starts at the point of submission, not just in Engineer-side tooling.
 - Submitting a ticket, or adding a note, also supports file attachments (§8.7) — screenshots, logs, documents. Attachments show as thumbnails inline, associated with the ticket, and are visible to Engineer/Manager/ServiceDeskAdmin too.
 - Internal notes are never shown here, obviously — the Customer view only ever renders external notes and external attachments.

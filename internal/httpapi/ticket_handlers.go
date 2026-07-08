@@ -82,6 +82,14 @@ type ticketsWorkspaceData struct {
 	// (RELEASE/v_3.0.0.md) - nil when there's no AI panel/symptom yet, or
 	// nothing clears KBService.MatchForSymptom's threshold.
 	KBSuggestion *models.KBArticle
+	// Error surfaces a failed action (bad upload, unresolved watcher email,
+	// illegal transition) as an inline banner instead of a bare error page
+	// (RELEASE/v_3.0.4.md) - set from the `?error=` query param that
+	// redirectToTicketWithError appends.
+	Error string
+	// YourEmail pre-fills the "add watchers by email" field with the
+	// viewer's own address (RELEASE/v_3.0.4.md) - empty when not viewing a ticket.
+	YourEmail string
 }
 
 // loadTicketsList builds the ticket list query from request filters/view and
@@ -338,9 +346,13 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	userNames := make(map[int64]string, len(allUsers))
 	userRoles := make(map[int64]models.Role, len(allUsers))
+	var yourEmail string
 	for _, u := range allUsers {
 		userNames[u.ID] = u.Username
 		userRoles[u.ID] = u.Role
+		if u.ID == claims.UserID {
+			yourEmail = u.Email
+		}
 	}
 
 	var agents []models.User
@@ -388,6 +400,7 @@ func (s *Server) handleTicketDetail(w http.ResponseWriter, r *http.Request) {
 		Watching: watching, Workflows: workflows, WaitingTasks: waiting, WaitingForms: waitingForms,
 		Approvals: approvals, UserNames: userNames, UserRoles: userRoles, Attachments: attachments,
 		AISummary: aiSummary, Services: services, KBSuggestion: kbSuggestion,
+		Error: r.URL.Query().Get("error"), YourEmail: yourEmail,
 	})
 }
 
@@ -490,7 +503,7 @@ func (s *Server) handleNoteCreate(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	internal := r.FormValue("internal") == "on" && claims.Role != models.RoleCustomer
 	if _, err := s.noteSvc.Add(claims, id, r.FormValue("body"), internal); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		redirectToTicketWithError(w, r, id, "Could not post that note: "+err.Error())
 		return
 	}
 	redirectToTicket(w, r, id)
@@ -505,6 +518,32 @@ func (s *Server) handleWatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.ticketSvc.Watch(claims.UserID, id); err != nil {
 		s.log.Error("tickets: watch failed", "ticket_id", id, "user_id", claims.UserID, "err", err)
+	}
+	redirectToTicket(w, r, id)
+}
+
+// handleWatchersAdd lets the viewer invite a few other people (by email) to
+// watch the ticket alongside them (RELEASE/v_3.0.4.md) - see
+// TicketService.WatchByEmails for the resolution/authorization rules.
+func (s *Server) handleWatchersAdd(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFrom(r.Context())
+	id, err := ticketIDFromPath(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	_ = r.ParseForm()
+	emails := strings.FieldsFunc(r.FormValue("emails"), func(c rune) bool {
+		return c == ',' || c == '\n' || c == '\r' || c == ' ' || c == '\t'
+	})
+	unresolved, err := s.ticketSvc.WatchByEmails(claims, id, emails)
+	if err != nil {
+		redirectToTicketWithError(w, r, id, "Could not add watchers: "+err.Error())
+		return
+	}
+	if len(unresolved) > 0 {
+		redirectToTicketWithError(w, r, id, "No ServiceDesk account found for: "+strings.Join(unresolved, ", "))
+		return
 	}
 	redirectToTicket(w, r, id)
 }
@@ -562,4 +601,22 @@ func (s *Server) handleLabelRemove(w http.ResponseWriter, r *http.Request) {
 func redirectToTicket(w http.ResponseWriter, r *http.Request, id int64) {
 	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- id is our own DB-generated int64, not user input
 	http.Redirect(w, r, "/tickets/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}
+
+// redirectToTicketWithError keeps a failed action (bad upload, unresolved
+// watcher email, illegal transition) inside the ticket page instead of
+// navigating to a bare http.Error text response (RELEASE/v_3.0.4.md) - msg is
+// carried as a query param and rendered as a dismissible banner by
+// handleTicketDetail/tickets_workspace.html.
+func redirectToTicketWithError(w http.ResponseWriter, r *http.Request, id int64, msg string) {
+	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- id is our own DB-generated int64, not user input
+	http.Redirect(w, r, "/tickets/"+strconv.FormatInt(id, 10)+"?error="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+func humanSize(bytes int64) string {
+	const mb = 1 << 20
+	if bytes >= mb {
+		return strconv.FormatInt(bytes/mb, 10) + "MB"
+	}
+	return strconv.FormatInt(bytes/1024, 10) + "KB"
 }

@@ -27,6 +27,14 @@ func (r *UserRepo) GetByID(id int64) (*models.User, error) {
 	return &u, nil
 }
 
+func (r *UserRepo) FindByEmail(email string) (*models.User, error) {
+	var u models.User
+	if err := r.db.Where("email = ?", email).First(&u).Error; err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 func (r *UserRepo) List() ([]models.User, error) {
 	var users []models.User
 	err := r.db.Order("username").Find(&users).Error

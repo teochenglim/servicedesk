@@ -138,6 +138,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /tickets/{id}/attachments", protect(s.handleAttachmentUpload))
 	mux.Handle("GET /attachments/{id}", protect(s.handleAttachmentDownload))
 	mux.Handle("POST /tickets/{id}/watch", protect(s.handleWatch))
+	mux.Handle("POST /tickets/{id}/watchers", protect(s.handleWatchersAdd))
 	mux.Handle("POST /tickets/{id}/unwatch", protect(s.handleUnwatch))
 	// Setting/correcting the impacted service is a triage action (RELEASE/v_2.1.0.md).
 	mux.Handle("POST /tickets/{id}/service", agentOnly(s.handleTicketServiceUpdate))
@@ -161,7 +162,9 @@ func (s *Server) Routes() http.Handler {
 		mux.Handle("POST /tickets/{id}/ai-summary/{field}/regenerate", agentOnly(s.handleAISummaryRegenerateField))
 	}
 
-	mux.Handle("GET /queues", protect(s.handleQueuesList))
+	// Queue is an internal routing concept (DESIGN/08 §8.4/§8.6) - Customer
+	// never needs to know which queue their ticket is in.
+	mux.Handle("GET /queues", agentOnly(s.handleQueuesList))
 	mux.Handle("POST /queues", queueAdminOnly(s.handleQueueCreate))
 	mux.Handle("POST /queues/{id}/delete", queueAdminOnly(s.handleQueueDelete))
 	mux.Handle("POST /queues/{id}/members", queueAdminOnly(s.handleQueueMemberAdd))
@@ -171,9 +174,11 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /manager", queueAdminOnly(s.handleManagerDashboard))
 	mux.Handle("GET /manager/activity", queueAdminOnly(s.handleManagerActivity))
 
-	mux.Handle("GET /problems", protect(s.handleProblemsList))
+	// Problem Management/RCA is an Engineer+ concept - not a Customer concern
+	// (DESIGN/08 §8.4 covers only Tickets/KB for that persona).
+	mux.Handle("GET /problems", agentOnly(s.handleProblemsList))
 	mux.Handle("POST /problems", agentOnly(s.handleProblemCreate))
-	mux.Handle("GET /problems/{id}", protect(s.handleProblemDetail))
+	mux.Handle("GET /problems/{id}", agentOnly(s.handleProblemDetail))
 	mux.Handle("POST /problems/{id}/link", agentOnly(s.handleProblemLink))
 
 	// Knowledge Base Feedback Loop (DESIGN/08 §8.10): /kb is the published,

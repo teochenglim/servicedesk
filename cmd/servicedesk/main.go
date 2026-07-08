@@ -122,7 +122,7 @@ func main() {
 	// articles manually even with AI features off.
 	kbSvc := service.NewKBService(kbArticles, tickets, aiSnapshots)
 
-	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, hub, whDispatcher, engine, kbSvc, aiTrigger, log)
+	ticketSvc := service.NewTicketService(tickets, events, watchers, tags, queues, notes, queueMembers, users, orgMembers, hub, whDispatcher, engine, kbSvc, aiTrigger, log)
 	noteSvc := service.NewNoteService(notes, events, watchers, tickets, hub, whDispatcher, engine, aiTrigger, log)
 	problemSvc := service.NewProblemService(problems, tags)
 	attachmentSvc := service.NewAttachmentService(attachments, notes, int64(cfg.AttachmentMaxSizeBytes))

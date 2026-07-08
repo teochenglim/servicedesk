@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"servicedesk/internal/auth"
@@ -23,6 +24,8 @@ type TicketService struct {
 	queues       *repo.QueueRepo
 	notes        *repo.NoteRepo
 	queueMembers *repo.QueueMembershipRepo
+	users        *repo.UserRepo
+	orgMembers   *repo.OrgMembershipRepo
 
 	notifier  EventPublisher
 	webhooks  WebhookDispatcher
@@ -35,12 +38,13 @@ type TicketService struct {
 func NewTicketService(
 	tickets *repo.TicketRepo, events *repo.EventLogRepo, watchers *repo.WatcherRepo,
 	tags *repo.TagRepo, queues *repo.QueueRepo, notes *repo.NoteRepo, queueMembers *repo.QueueMembershipRepo,
+	users *repo.UserRepo, orgMembers *repo.OrgMembershipRepo,
 	notifier EventPublisher, webhooks WebhookDispatcher, workflows WorkflowTrigger, kb KBProposalTrigger,
 	aiSummary AISummaryTrigger, log *slog.Logger,
 ) *TicketService {
 	return &TicketService{
 		tickets: tickets, events: events, watchers: watchers, tags: tags, queues: queues, notes: notes,
-		queueMembers: queueMembers,
+		queueMembers: queueMembers, users: users, orgMembers: orgMembers,
 		notifier:     notifier, webhooks: webhooks, workflows: workflows, kb: kb, aiSummary: aiSummary, log: log,
 	}
 }
@@ -362,6 +366,44 @@ func (s *TicketService) UpdateFields(actor *auth.Claims, ticketID int64, in Upda
 func (s *TicketService) Watch(userID, ticketID int64) error { return s.watchers.Add(ticketID, userID) }
 func (s *TicketService) Unwatch(userID, ticketID int64) error {
 	return s.watchers.Remove(ticketID, userID)
+}
+
+// WatchByEmails resolves each email to an existing account and adds it as a
+// watcher (RELEASE/v_3.0.4.md multi-watcher) - there's no "external,
+// unregistered email" watcher concept, only inviting people who already have
+// a ServiceDesk login. A Customer actor may only invite users within the
+// ticket's own organization (DESIGN/02 §2.3 visibility rule); staff can
+// invite anyone, same as their unrestricted ticket visibility. Emails that
+// don't resolve (or, for a Customer, resolve outside the org) are returned
+// unresolved rather than erroring the whole call, so the caller can still add
+// whichever names did resolve and tell the user which didn't.
+func (s *TicketService) WatchByEmails(actor *auth.Claims, ticketID int64, emails []string) (unresolved []string, err error) {
+	t, err := s.tickets.Get(ticketID)
+	if err != nil {
+		return nil, err
+	}
+	for _, raw := range emails {
+		email := strings.TrimSpace(raw)
+		if email == "" {
+			continue
+		}
+		u, ferr := s.users.FindByEmail(email)
+		if ferr != nil {
+			unresolved = append(unresolved, email)
+			continue
+		}
+		if actor.Role == models.RoleCustomer {
+			member, merr := s.orgMembers.IsMember(t.OrgID, u.ID)
+			if merr != nil || !member {
+				unresolved = append(unresolved, email)
+				continue
+			}
+		}
+		if err := s.watchers.Add(ticketID, u.ID); err != nil {
+			return unresolved, err
+		}
+	}
+	return unresolved, nil
 }
 
 func (s *TicketService) AddLabel(actor *auth.Claims, ticketID int64, name, kind string) error {

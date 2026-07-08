@@ -38,12 +38,14 @@ func TestNotes_InternalHiddenFromCustomer(t *testing.T) {
 	}
 }
 
-// TestCustomerView_AlwaysShowsCloseReopenAndHidesStaffJargon covers DESIGN/08
-// §8.4: Close/Reopen must be offered to a Customer regardless of ticket
-// status (the state machine still legitimately rejects an illegal one
-// server-side), and queue names/labels/audit trail/Ack-Mitigate jargon are
-// staff-only surfaces that must never reach the Customer-rendered page.
-func TestCustomerView_AlwaysShowsCloseReopenAndHidesStaffJargon(t *testing.T) {
+// TestCustomerView_GatesCloseReopenByStatusAndHidesStaffJargon covers
+// DESIGN/08 §8.4 (revised by RELEASE/v_3.0.4.md after customer feedback that
+// an always-visible Reopen button on a brand-new ticket read as broken, not
+// flexible): Close ticket/Reopen are only offered once they're a legal next
+// move for the ticket's current status, while Add note stays always visible.
+// Queue names/labels/audit trail/Ack-Mitigate jargon remain staff-only
+// surfaces that must never reach the Customer-rendered page.
+func TestCustomerView_GatesCloseReopenByStatusAndHidesStaffJargon(t *testing.T) {
 	env := newTestEnv(t)
 	admin := env.client()
 	admin.mustLogin("", "admin", "admin123")
@@ -58,11 +60,14 @@ func TestCustomerView_AlwaysShowsCloseReopenAndHidesStaffJargon(t *testing.T) {
 	})
 	admin.mustPost(t, "/tickets/1/labels", url.Values{"name": {"database"}, "kind": {"incident"}})
 
-	// New ticket: Close/Reopen must still be offered, even though the state
-	// machine doesn't actually allow either action from New yet.
+	// New ticket: neither Close ticket nor Reopen is a legal move yet, so
+	// neither should render - but Add note always does.
 	body := bodyString(t, cust.get("/tickets/1"))
-	if !strings.Contains(body, "Close ticket") || !strings.Contains(body, "Reopen") {
-		t.Fatal("customer should always see Close ticket / Reopen, even on a New ticket")
+	if strings.Contains(body, "Close ticket") || strings.Contains(body, "Reopen") {
+		t.Fatal("customer should not see Close ticket / Reopen on a New ticket - neither is a legal transition yet")
+	}
+	if !strings.Contains(body, "Send") {
+		t.Fatal("customer should always see the note composer")
 	}
 	for _, jargon := range []string{"Queue 1", "Labels</h3>", "Audit Trail", "Ack", "Mitigate"} {
 		if strings.Contains(body, jargon) {
@@ -70,12 +75,31 @@ func TestCustomerView_AlwaysShowsCloseReopenAndHidesStaffJargon(t *testing.T) {
 		}
 	}
 
-	// An illegal transition attempted via the always-visible button is still
-	// rejected server-side (New has no "confirm" transition).
+	// An illegal transition attempted directly (bypassing the UI gate) is
+	// still rejected server-side (New has no "confirm" transition).
 	resp := cust.postFormNoRedirect("/tickets/1/transition", url.Values{"action": {"confirm"}})
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("illegal confirm from New: got %d, want 400", resp.StatusCode)
+	}
+
+	// Drive the ticket to Resolved (staff actions): both Close ticket and
+	// Reopen become legal, and the customer view should now offer both.
+	admin.mustPost(t, "/tickets/1/pickup", nil)
+	admin.mustPost(t, "/tickets/1/transition", url.Values{"action": {"resolve"}})
+	body = bodyString(t, cust.get("/tickets/1"))
+	if !strings.Contains(body, "Close ticket") || !strings.Contains(body, "Reopen") {
+		t.Fatal("customer should see both Close ticket and Reopen once the ticket is Resolved")
+	}
+
+	// Customer closes it: only Reopen is legal from Closed.
+	cust.mustPost(t, "/tickets/1/transition", url.Values{"action": {"confirm"}})
+	body = bodyString(t, cust.get("/tickets/1"))
+	if strings.Contains(body, "Close ticket") {
+		t.Fatal("customer should not see Close ticket once the ticket is Closed")
+	}
+	if !strings.Contains(body, "Reopen") {
+		t.Fatal("customer should still see Reopen once the ticket is Closed")
 	}
 
 	// Staff still sees queue/labels/audit trail and the technical stage wording.

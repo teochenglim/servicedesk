@@ -42,6 +42,14 @@ h3 { font-size: 1rem; }
   padding: 0.4rem 1rem; font-size: 0.85rem; font-weight: 600;
 }
 .sudo-banner .link-btn { color: #1a1a1a; text-decoration: underline; font-weight: 600; margin-left: 0.5rem; }
+
+/* --- Inline action-error banner (RELEASE/v_3.0.4.md): a failed action (bad
+   upload, unresolved watcher email, illegal transition) stays on the ticket
+   page instead of navigating to a bare error page. --- */
+.error-banner {
+  background: rgba(214,69,69,0.1); border: 1px solid #D64545; color: #D64545;
+  border-radius: 8px; padding: 0.6rem 0.9rem; font-size: 0.9rem; margin-bottom: 0.75rem;
+}
 .topbar form[action="/admin/demo/reset"] .icon-btn {
   border: 1px solid rgba(255,255,255,0.35); border-radius: 8px; padding: 0.35rem 0.7rem; font-size: 0.8rem;
 }

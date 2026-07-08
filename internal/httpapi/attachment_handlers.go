@@ -30,23 +30,23 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 
 	r.Body = http.MaxBytesReader(w, r.Body, s.attachmentSvc.MaxSize()+1<<20) // +1MB of multipart overhead
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
-		http.Error(w, "upload too large or malformed", http.StatusBadRequest)
+		redirectToTicketWithError(w, r, id, "That file is too large to attach (max "+humanSize(s.attachmentSvc.MaxSize())+").")
 		return
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "missing file", http.StatusBadRequest)
+		redirectToTicketWithError(w, r, id, "Choose a file before clicking Add attachment.")
 		return
 	}
 	defer file.Close()
 	data, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "could not read file", http.StatusBadRequest)
+		redirectToTicketWithError(w, r, id, "Could not read that file. Please try again.")
 		return
 	}
 
 	if _, err := s.attachmentSvc.Upload(claims, id, nil, header.Filename, data); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		redirectToTicketWithError(w, r, id, "Could not attach that file: "+err.Error())
 		return
 	}
 	redirectToTicket(w, r, id)

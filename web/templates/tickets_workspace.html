@@ -67,6 +67,7 @@
     <h1>#{{.Ticket.ID}} {{.Ticket.Title}} <span id="live-badge" class="badge" data-status="New">live</span></h1>
     <span class="badge" data-status="{{.Ticket.Status}}">{{.Ticket.Status}}</span>
   </div>
+  {{if .Error}}<div class="error-banner">{{.Error}}</div>{{end}}
   {{template "progress_bar" (dict "Ticket" .Ticket "Plain" (eq .User.Role "Customer"))}}
   {{if eq .User.Role "Customer"}}{{with .Notes}}{{$last := index . (add (len .) -1)}}{{if not $last.Internal}}
   <p class="muted" style="font-style:italic;">&ldquo;{{$last.Body}}&rdquo; — {{$last.CreatedAt.Format "2006-01-02 15:04"}}</p>
@@ -117,16 +118,30 @@
             <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reopen"><button class="secondary" type="submit">Reopen</button></form>
           {{end}}
           {{else}}
-          <!-- Customer: Close/Reopen are always offered regardless of status (DESIGN/08 §8.4) -
-               the state machine still legitimately rejects an illegal transition server-side. -->
+          <!-- Customer: Close/Reopen only shown when legal from the current status
+               (DESIGN/08 §8.4) - the state machine still rejects an illegal
+               transition server-side regardless. -->
+          {{if eq .Ticket.Status "Resolved"}}
           <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="confirm"><button class="primary" type="submit">Close ticket</button></form>
           <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reopen"><button class="secondary" type="submit">Reopen</button></form>
+          {{else if eq .Ticket.Status "Closed"}}
+          <form method="post" action="/tickets/{{.Ticket.ID}}/transition"><input type="hidden" name="action" value="reopen"><button class="secondary" type="submit">Reopen</button></form>
+          {{end}}
           {{end}}
           {{if .Watching}}
             <form method="post" action="/tickets/{{.Ticket.ID}}/unwatch"><button class="secondary" type="submit">Unwatch</button></form>
           {{else}}
             <form method="post" action="/tickets/{{.Ticket.ID}}/watch"><button class="secondary" type="submit">Watch</button></form>
           {{end}}
+        </div>
+
+        <div x-data="{ inviteOpen: false }">
+          <button type="button" class="link-btn" x-on:click="inviteOpen = !inviteOpen">+ Notify other people about this ticket</button>
+          <form method="post" action="/tickets/{{.Ticket.ID}}/watchers" x-show="inviteOpen" class="stacked" style="margin-top:0.35rem;">
+            <label class="muted" style="margin:0;">Emails of people to keep in the loop (comma-separated) — each needs an existing ServiceDesk account</label>
+            <input type="text" name="emails" value="{{.YourEmail}}" placeholder="you@example.com, teammate@example.com">
+            <div class="actions"><button class="secondary" type="submit">Add watchers</button></div>
+          </form>
         </div>
 
         {{range .Attachments}}{{if not .NoteID}}
@@ -239,6 +254,16 @@
         <h3 style="margin:0;">Details</h3>
         <button type="button" class="link-btn" x-on:click="detailsOpen = false" :style="detailsOpen ? '' : 'display:none'">Close</button>
       </div>
+
+      {{if eq .User.Role "Customer"}}
+      <div class="card">
+        <h3>Problem</h3>
+        <p class="muted"><strong>Title:</strong> {{.Ticket.Title}}</p>
+        <p class="muted"><strong>Category:</strong> {{.Ticket.Category}} · <span class="badge prio-{{.Ticket.Priority}}">{{.Ticket.Priority}}</span></p>
+        <p class="muted"><strong>Submitted:</strong> {{.Ticket.CreatedAt.Format "2006-01-02 15:04"}}</p>
+        <div><strong>Description:</strong> {{markdown .Ticket.Description}}</div>
+      </div>
+      {{end}}
 
       {{if .User.Role.IsAgent}}
       <div class="card">
