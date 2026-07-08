@@ -105,3 +105,16 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
 }
+
+// Flush makes statusRecorder itself satisfy http.Flusher (RELEASE/v_3.0.7.md).
+// Embedding the http.ResponseWriter interface only promotes that interface's
+// own methods (Write/Header/WriteHeader) - Flush belongs to the separate
+// http.Flusher interface, so without this, sse.Hub.Handler's `w.(http.Flusher)`
+// type assertion failed on every request wrapped by this middleware (i.e.
+// every request, since it wraps the whole mux), and GET /events 500'd
+// immediately with "streaming unsupported" instead of ever streaming.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}

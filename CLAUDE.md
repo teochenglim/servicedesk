@@ -38,6 +38,7 @@ Full layering rules and the request-flow example are in [ARCHITECTURE.md](ARCHIT
 ```
 build          Build the servicedesk binary into ./bin
 run            Run the server locally (sqlite, ./servicedesk.db)
+demo           Run locally in demo mode (sqlite, seeds demo data on first boot - see DEMO.md)
 test           Run the full test suite
 test-verbose   Run the full test suite with verbose per-test output
 vet            Run go vet
@@ -58,6 +59,10 @@ release        Bump, commit, tag, push - triggers GitHub Actions (VERSION=x.y.z 
 ```
 
 **Before claiming a change works**: run `make vet test`, and if it touches DB code, smoke-test against at least sqlite (`make up`) — MySQL/Postgres bugs in this project have consistently been dialect-specific and invisible to `go vet`/unit tests (see [RELEASE/v_1.0.0.md](RELEASE/v_1.0.0.md) "Bugs found and fixed").
+
+**If a change touches `web/static/js` or a vendored frontend library, `go test`/`curl` smoke-testing it is not enough** — neither one executes client-side JS, so a bug purely in `app.js` or a vendored bundle (a markdown editor that never actually mounts, an SSE stream that silently never delivers) looks completely fine from the server side: the HTML is correct, the mount point is right there in the markup, nothing server-side ever fails. Two bugs exactly like this shipped unnoticed until a live user hit them (RELEASE/v_3.0.6.md, RELEASE/v_3.0.7.md). Verify with an actual browser executing the page: `make demo` in one terminal, then drive it headlessly with Playwright's Python bindings (already available on this machine as the system Python's `playwright` package, not an npm one — invoke via `/opt/homebrew/opt/python@3.12/bin/python3.12`, `sync_playwright()`, `page.on("pageerror", ...)` to catch JS exceptions the rendered HTML would never reveal).
+
+**Before ending a task**: if the change affects behavior, update the relevant doc(s) — [DESIGN.md](DESIGN.md)/[DESIGN/](DESIGN/) if it changes *what*/*why* the system does something, [ARCHITECTURE.md](ARCHITECTURE.md) if it changes *how* the code is organized or adds a durable gotcha future work should know about, and always [RELEASE.md](RELEASE.md) (newest entry first) + a new `RELEASE/v_x.y.z.md` for what shipped. Bump [VERSION](VERSION) (`make bump VERSION=x.y.z`) alongside it. Don't wait to be asked for each one separately. Then close out with a 1-line git commit message summarizing the change (the user commits it themselves — don't run `git commit` unless explicitly asked).
 
 ## CI/CD
 
