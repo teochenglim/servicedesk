@@ -1,0 +1,36 @@
+{{define "admin_categories"}}
+{{template "header" .}}
+<h1>Category Catalog</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<p class="muted">Top-level categories (no parent) appear in the ticket submission dropdown. Title/Description templates prefill (but never lock) those fields when a category is picked.</p>
+
+{{range .Categories}}
+<div class="card">
+  <div class="actions" style="justify-content:space-between;">
+    <h3 style="margin:0;">{{.Name}} <span class="muted">(#{{.ID}})</span></h3>
+    <form method="post" action="/admin/categories/{{.ID}}/delete" onsubmit="return confirm('Delete category?')"><button class="link-btn" type="submit">Delete</button></form>
+  </div>
+  <form class="stacked" method="post" action="/admin/categories/{{.ID}}">
+    <label>Name</label><input type="text" name="name" value="{{.Name}}" required>
+    <label>Parent category ID (optional)</label><input type="number" name="parent_id" value="{{.ParentID}}">
+    <label>Title template (optional)</label><input type="text" name="title_template" value="{{.TitleTemplate}}">
+    <label>Description template (optional)</label><textarea name="description_template">{{.DescriptionTemplate}}</textarea>
+    <div class="actions"><button class="secondary" type="submit">Save</button></div>
+  </form>
+</div>
+{{else}}
+<div class="card"><p class="muted">No categories defined yet.</p></div>
+{{end}}
+
+<div class="card">
+  <h3>New category</h3>
+  <form class="stacked" method="post" action="/admin/categories">
+    <label>Name</label><input type="text" name="name" required placeholder="e.g. Network">
+    <label>Parent category ID (optional)</label><input type="number" name="parent_id">
+    <label>Title template (optional)</label><input type="text" name="title_template" placeholder="e.g. [Network] ">
+    <label>Description template (optional)</label><textarea name="description_template" placeholder="Prompt the customer for what you need, e.g. what device, when it started..."></textarea>
+    <div class="actions"><button class="primary" type="submit">Create category</button></div>
+  </form>
+</div>
+{{template "footer" .}}
+{{end}}

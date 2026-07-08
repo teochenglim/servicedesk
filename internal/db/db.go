@@ -54,12 +54,17 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 		&models.Workflow{}, &models.WorkflowTask{}, &models.Approval{}, &models.EventLog{},
 		&models.TicketAISnapshot{},
 		&models.Service{}, &models.KBArticle{}, &models.KBArticleService{},
+		&models.Category{},
 	); err != nil {
 		return nil, fmt.Errorf("automigrate: %w", err)
 	}
 
 	if err := seedDefaultQueue(gdb); err != nil {
 		return nil, fmt.Errorf("seed default queue: %w", err)
+	}
+
+	if err := seedDefaultCategory(gdb); err != nil {
+		return nil, fmt.Errorf("seed default category: %w", err)
 	}
 
 	if err := renameQueueAdminRole(gdb); err != nil {
@@ -118,6 +123,21 @@ func seedDefaultQueue(gdb *gorm.DB) error {
 	}
 	return gdb.Exec(`INSERT INTO queues (id, name, default_priority, default_category) VALUES (?, ?, ?, ?)`,
 		1, "General", "P3", "General").Error
+}
+
+// seedDefaultCategory mirrors seedDefaultQueue: a fresh non-demo install
+// must always have at least one Category to submit a ticket against, since
+// the submission form's category field is now a dropdown, not free text
+// (RELEASE/v_3.0.5.md).
+func seedDefaultCategory(gdb *gorm.DB) error {
+	var count int64
+	if err := gdb.Model(&models.Category{}).Where("id = ?", 1).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	return gdb.Exec(`INSERT INTO categories (id, name) VALUES (?, ?)`, 1, "General").Error
 }
 
 func applySQLiteFTS(gdb *gorm.DB) error {

@@ -25,8 +25,23 @@ var queueSpecs = []struct {
 	DefaultPriority string
 	DefaultCategory string
 }{
-	{"Service Desk", "P3", "general"},
-	{"Network Ops", "P2", "network"},
+	{"Service Desk", "P3", "IT Support"},
+	{"Network Ops", "P2", "Networking"},
+}
+
+// categorySpecs is the demo ticket-submission Category catalog
+// (RELEASE/v_3.0.5.md) - deliberately distinct names from the guaranteed
+// default Category #1 ("General", seedDefaultCategory in internal/db/db.go),
+// same reasoning as queueSpecs never reusing the guaranteed default Queue #1
+// ("General"): demo data is its own self-contained set, the guaranteed
+// default just sits unused (but present) in demo mode.
+var categorySpecs = []struct {
+	Name                string
+	TitleTemplate       string
+	DescriptionTemplate string
+}{
+	{"IT Support", "", "Please describe: what were you trying to do, what happened instead, and any error message you saw."},
+	{"Networking", "", "Please include: which device/location, when it started, and whether it's affecting just you or others."},
 }
 
 const (
@@ -90,6 +105,9 @@ func Seed(db *gorm.DB, log *slog.Logger) error {
 		services, err := createServices(tx, queues, users)
 		if err != nil {
 			return fmt.Errorf("demo: create services: %w", err)
+		}
+		if err := createCategories(tx); err != nil {
+			return fmt.Errorf("demo: create categories: %w", err)
 		}
 		tickets, err := createTickets(tx, orgs, queues, users, services)
 		if err != nil {
@@ -181,6 +199,14 @@ func wipe(db *gorm.DB) error {
 			serviceNames[i] = s.Name
 		}
 		if err := tx.Where("name IN ?", serviceNames).Delete(&models.Service{}).Error; err != nil {
+			return err
+		}
+
+		categoryNames := make([]string, len(categorySpecs))
+		for i, c := range categorySpecs {
+			categoryNames[i] = c.Name
+		}
+		if err := tx.Where("name IN ?", categoryNames).Delete(&models.Category{}).Error; err != nil {
 			return err
 		}
 
@@ -311,6 +337,19 @@ func createServices(tx *gorm.DB, queues []models.Queue, users seededUsers) ([]mo
 	return services, nil
 }
 
+// createCategories seeds the demo ticket-submission Category catalog
+// (RELEASE/v_3.0.5.md) - all top-level (no ParentID), matching this cycle's
+// flat-dropdown scope.
+func createCategories(tx *gorm.DB) error {
+	for _, spec := range categorySpecs {
+		c := models.Category{Name: spec.Name, TitleTemplate: spec.TitleTemplate, DescriptionTemplate: spec.DescriptionTemplate}
+		if err := tx.Create(&c).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ticketSpec describes one seeded ticket. CustomerIdx/EngineerIdx/QueueIdx
 // index into the slices createUsers/createQueues returned; the customer's
 // org (via the 2-per-org split in createUsers) becomes the ticket's OrgID.
@@ -326,21 +365,21 @@ type ticketSpec struct {
 func eng(i int) *int { return &i }
 
 var ticketSpecs = []ticketSpec{
-	{"Cannot access email", "Login fails with 'account locked' after 3 attempts.", "general", models.PriorityP2, models.StatusNew, 0, 0, nil, "ok"},
-	{"VPN drops every 10 minutes", "Client disconnects repeatedly, has to reauth each time.", "network", models.PriorityP1, models.StatusInProgress, 1, 1, eng(2), "warning"},
-	{"Printer offline on 3rd floor", "HP LaserJet shows offline in Windows.", "general", models.PriorityP4, models.StatusResolved, 0, 2, eng(0), "ok"},
-	{"Password reset request", "Forgot password, needs a manual reset.", "general", models.PriorityP3, models.StatusClosed, 0, 3, eng(1), "ok"},
-	{"Office wifi outage", "Entire floor lost wifi around 9am.", "network", models.PriorityP1, models.StatusInProgress, 1, 4, eng(3), "breach"},
-	{"New laptop provisioning", "New hire starts Monday, needs a laptop imaged.", "general", models.PriorityP3, models.StatusNew, 0, 5, nil, "ok"},
-	{"Shared drive permissions", "Can't access the Finance shared drive anymore.", "general", models.PriorityP2, models.StatusInProgress, 0, 0, eng(1), "warning"},
-	{"Network switch flapping", "Switch in IDF-2 keeps dropping ports.", "network", models.PriorityP1, models.StatusNew, 1, 1, eng(2), "breach"},
-	{"Email spam filter too aggressive", "Legitimate vendor emails going to junk.", "general", models.PriorityP3, models.StatusResolved, 0, 2, eng(0), "ok"},
-	{"Guest wifi access request", "Need a temporary guest wifi code for visitors.", "network", models.PriorityP4, models.StatusClosed, 1, 3, eng(3), "ok"},
-	{"Slow VPN performance", "VPN throughput under 2mbps during business hours.", "network", models.PriorityP2, models.StatusInProgress, 1, 4, eng(2), "warning"},
-	{"Monitor flickering", "External monitor flickers intermittently.", "general", models.PriorityP4, models.StatusNew, 0, 5, nil, "ok"},
-	{"Firewall rule request", "Need an inbound rule opened for a vendor API.", "network", models.PriorityP2, models.StatusNew, 1, 0, eng(3), "ok"},
-	{"Software license renewal", "Design software license expired, needs renewal.", "general", models.PriorityP3, models.StatusResolved, 0, 1, eng(1), "ok"},
-	{"Site-to-site VPN down", "Branch office tunnel has been down since last night.", "network", models.PriorityP1, models.StatusInProgress, 1, 2, eng(2), "breach"},
+	{"Cannot access email", "Login fails with 'account locked' after 3 attempts.", "IT Support", models.PriorityP2, models.StatusNew, 0, 0, nil, "ok"},
+	{"VPN drops every 10 minutes", "Client disconnects repeatedly, has to reauth each time.", "Networking", models.PriorityP1, models.StatusInProgress, 1, 1, eng(2), "warning"},
+	{"Printer offline on 3rd floor", "HP LaserJet shows offline in Windows.", "IT Support", models.PriorityP4, models.StatusResolved, 0, 2, eng(0), "ok"},
+	{"Password reset request", "Forgot password, needs a manual reset.", "IT Support", models.PriorityP3, models.StatusClosed, 0, 3, eng(1), "ok"},
+	{"Office wifi outage", "Entire floor lost wifi around 9am.", "Networking", models.PriorityP1, models.StatusInProgress, 1, 4, eng(3), "breach"},
+	{"New laptop provisioning", "New hire starts Monday, needs a laptop imaged.", "IT Support", models.PriorityP3, models.StatusNew, 0, 5, nil, "ok"},
+	{"Shared drive permissions", "Can't access the Finance shared drive anymore.", "IT Support", models.PriorityP2, models.StatusInProgress, 0, 0, eng(1), "warning"},
+	{"Network switch flapping", "Switch in IDF-2 keeps dropping ports.", "Networking", models.PriorityP1, models.StatusNew, 1, 1, eng(2), "breach"},
+	{"Email spam filter too aggressive", "Legitimate vendor emails going to junk.", "IT Support", models.PriorityP3, models.StatusResolved, 0, 2, eng(0), "ok"},
+	{"Guest wifi access request", "Need a temporary guest wifi code for visitors.", "Networking", models.PriorityP4, models.StatusClosed, 1, 3, eng(3), "ok"},
+	{"Slow VPN performance", "VPN throughput under 2mbps during business hours.", "Networking", models.PriorityP2, models.StatusInProgress, 1, 4, eng(2), "warning"},
+	{"Monitor flickering", "External monitor flickers intermittently.", "IT Support", models.PriorityP4, models.StatusNew, 0, 5, nil, "ok"},
+	{"Firewall rule request", "Need an inbound rule opened for a vendor API.", "Networking", models.PriorityP2, models.StatusNew, 1, 0, eng(3), "ok"},
+	{"Software license renewal", "Design software license expired, needs renewal.", "IT Support", models.PriorityP3, models.StatusResolved, 0, 1, eng(1), "ok"},
+	{"Site-to-site VPN down", "Branch office tunnel has been down since last night.", "Networking", models.PriorityP1, models.StatusInProgress, 1, 2, eng(2), "breach"},
 }
 
 func createTickets(tx *gorm.DB, orgs []models.Organization, queues []models.Queue, users seededUsers, services []models.Service) ([]models.Ticket, error) {

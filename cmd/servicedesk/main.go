@@ -63,6 +63,7 @@ func main() {
 	attachments := repo.NewAttachmentRepo(gdb)
 	aiSnapshots := repo.NewAISnapshotRepo(gdb)
 	services := repo.NewServiceRepo(gdb)
+	categories := repo.NewCategoryRepo(gdb)
 	kbArticles := repo.NewKBArticleRepo(gdb)
 
 	if err := auth.Bootstrap(users, cfg, log); err != nil {
@@ -129,12 +130,13 @@ func main() {
 	queueSvc := service.NewQueueService(queues)
 	sudoSvc := service.NewSudoService(users, orgMembers, events, authMgr)
 	serviceSvc := service.NewServiceCatalogService(services)
+	categorySvc := service.NewCategoryService(categories)
 	slaBreachChecker := service.NewSLABreachChecker(tickets, events, hub, whDispatcher, log)
 
 	server := httpapi.NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers, webhooks, workflows, workflowTasks,
 		approvals, customFields, events, tickets, ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc,
-		serviceSvc, kbSvc,
+		serviceSvc, categorySvc, kbSvc,
 		aiSummarySvc, aiDraftSvc, cfg.AIEnabled, engine, hub,
 	)
 	server.SetDB(gdb)

@@ -41,6 +41,7 @@ type testEnv struct {
 	workflowTask *repo.WorkflowTaskRepo
 	approvals    *repo.ApprovalRepo
 	services     *repo.ServiceRepo
+	categories   *repo.CategoryRepo
 	kbArticles   *repo.KBArticleRepo
 	tickets      *repo.TicketRepo
 
@@ -91,6 +92,7 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 	events := repo.NewEventLogRepo(gdb)
 	attachments := repo.NewAttachmentRepo(gdb)
 	services := repo.NewServiceRepo(gdb)
+	categories := repo.NewCategoryRepo(gdb)
 	kbArticles := repo.NewKBArticleRepo(gdb)
 
 	cfg := config.Config{StaticUsers: ""}
@@ -123,13 +125,14 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 	queueSvc := service.NewQueueService(queues)
 	sudoSvc := service.NewSudoService(users, orgMembers, events, authMgr)
 	serviceSvc := service.NewServiceCatalogService(services)
+	categorySvc := service.NewCategoryService(categories)
 	slaBreachChecker := service.NewSLABreachChecker(tickets, events, hub, whDispatcher, log)
 
 	srv := NewServer(
 		authMgr, log, users, orgs, orgMembers, queues, queueMembers, tags, watchers,
 		webhooks, workflows, workflowTask, approvals, customFields, events, tickets,
 		ticketSvc, noteSvc, problemSvc, attachmentSvc, queueSvc, sudoSvc,
-		serviceSvc, kbSvc,
+		serviceSvc, categorySvc, kbSvc,
 		aiSummarySvc, aiDraftSvc, aiEnabled, engine, hub,
 	)
 	srv.SetDB(gdb)
@@ -142,7 +145,7 @@ func newTestEnvWithAI(t *testing.T, aiClient llm.Client) *testEnv {
 		users: users, orgs: orgs, orgMembers: orgMembers,
 		queues: queues, queueMembers: queueMembers,
 		webhooks: webhooks, workflows: workflows, workflowTask: workflowTask, approvals: approvals,
-		services: services, kbArticles: kbArticles, tickets: tickets,
+		services: services, categories: categories, kbArticles: kbArticles, tickets: tickets,
 		engine: engine, whDispatcher: whDispatcher, slaBreachChecker: slaBreachChecker,
 	}
 }

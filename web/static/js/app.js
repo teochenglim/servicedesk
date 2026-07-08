@@ -107,16 +107,42 @@ function initKBMatchButtons(root) {
   });
 }
 
+// initCategoryTemplates wires the ticket-new form's Category <select>
+// (RELEASE/v_3.0.5.md): each <option> carries data-title/data-description
+// from the Category catalog's templates, so picking one prefills the Title
+// input and the Description editor - skipped when a category has no
+// template (empty dataset value), so it never clobbers what the customer
+// already typed. Mirrors initAIDraftButtons' exact mechanism for writing
+// into the Toast UI editor (mount.toastEditor.setMarkdown).
+function initCategoryTemplates(root) {
+  root.querySelectorAll("select[data-category-templates]:not([data-cat-tpl-initialized])").forEach(function (select) {
+    select.dataset.catTplInitialized = "1";
+    select.addEventListener("change", function () {
+      var opt = select.selectedOptions[0];
+      if (!opt) return;
+      var form = select.closest("form");
+      var title = form && form.querySelector("[name=title]");
+      if (title && opt.dataset.title) title.value = opt.dataset.title;
+      var descMount = document.getElementById("md-editor-description");
+      if (descMount && descMount.toastEditor && opt.dataset.description) {
+        descMount.toastEditor.setMarkdown(opt.dataset.description);
+      }
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   hljs.highlightAll();
   initMarkdownEditors(document);
   initAIDraftButtons(document);
   initKBMatchButtons(document);
+  initCategoryTemplates(document);
   document.body.addEventListener("htmx:afterSwap", function () {
     hljs.highlightAll();
     initMarkdownEditors(document);
     initAIDraftButtons(document);
     initKBMatchButtons(document);
+    initCategoryTemplates(document);
   });
 
   document.body.addEventListener("htmx:beforeRequest", function (evt) {

@@ -45,7 +45,7 @@ func NewTicketService(
 	return &TicketService{
 		tickets: tickets, events: events, watchers: watchers, tags: tags, queues: queues, notes: notes,
 		queueMembers: queueMembers, users: users, orgMembers: orgMembers,
-		notifier:     notifier, webhooks: webhooks, workflows: workflows, kb: kb, aiSummary: aiSummary, log: log,
+		notifier: notifier, webhooks: webhooks, workflows: workflows, kb: kb, aiSummary: aiSummary, log: log,
 	}
 }
 

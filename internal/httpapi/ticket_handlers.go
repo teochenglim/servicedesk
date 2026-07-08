@@ -162,15 +162,21 @@ func (s *Server) handleTicketsList(w http.ResponseWriter, r *http.Request) {
 
 type ticketNewData struct {
 	baseData
-	Queues   []models.Queue
-	Services []models.Service
-	Error    string
+	Queues     []models.Queue
+	Services   []models.Service
+	Categories []models.Category
+	Error      string
+}
+
+func (s *Server) ticketNewPageData(r *http.Request, errMsg string) ticketNewData {
+	queues, _ := s.queues.List()
+	services, _ := s.serviceSvc.List()
+	categories, _ := s.categorySvc.ListTopLevel()
+	return ticketNewData{baseData: s.base(r, "New ticket"), Queues: queues, Services: services, Categories: categories, Error: errMsg}
 }
 
 func (s *Server) handleTicketNewPage(w http.ResponseWriter, r *http.Request) {
-	queues, _ := s.queues.List()
-	services, _ := s.serviceSvc.List()
-	s.render.Render(w, "ticket_new", ticketNewData{baseData: s.base(r, "New ticket"), Queues: queues, Services: services})
+	s.render.Render(w, "ticket_new", s.ticketNewPageData(r, ""))
 }
 
 // parseServiceID reads the "service_id" form field (an <select> with a blank
@@ -216,7 +222,14 @@ func (s *Server) handleTicketCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
-	queueID, _ := strconv.ParseInt(r.FormValue("queue_id"), 10, 64)
+	// Customer's form never renders the Queue field (RELEASE/v_3.0.5.md) - a
+	// missing/unparseable queue_id falls back to the guaranteed default Queue
+	// #1 (seedDefaultQueue in internal/db/db.go), not an error. Staff's form
+	// always submits a valid selection, so this never overrides their choice.
+	queueID, err := strconv.ParseInt(r.FormValue("queue_id"), 10, 64)
+	if err != nil {
+		queueID = 1
+	}
 	serviceID, err := parseServiceID(r)
 	if err != nil {
 		http.Error(w, "invalid service id", http.StatusBadRequest)
@@ -232,10 +245,23 @@ func (s *Server) handleTicketCreate(w http.ResponseWriter, r *http.Request) {
 		CustomFields: customFieldsFromForm(r.Form),
 	})
 	if err != nil {
-		queues, _ := s.queues.List()
-		services, _ := s.serviceSvc.List()
-		s.render.Render(w, "ticket_new", ticketNewData{baseData: s.base(r, "New ticket"), Queues: queues, Services: services, Error: err.Error()})
+		data := s.ticketNewPageData(r, err.Error())
+		s.render.Render(w, "ticket_new", data)
 		return
+	}
+	// Optional watchers at creation (RELEASE/v_3.0.5.md) - the creator is
+	// already auto-watched by TicketService.Create; a typo'd invite here
+	// shouldn't block ticket creation, so unresolved emails are only logged,
+	// unlike handleWatchersAdd's dedicated error-banner flow on the detail page.
+	if raw := r.FormValue("watcher_emails"); raw != "" {
+		emails := strings.FieldsFunc(raw, func(c rune) bool {
+			return c == ',' || c == '\n' || c == '\r' || c == ' ' || c == '\t'
+		})
+		if unresolved, werr := s.ticketSvc.WatchByEmails(claims, t.ID, emails); werr != nil {
+			s.log.Warn("ticket create: watch by emails failed", "ticket_id", t.ID, "err", werr)
+		} else if len(unresolved) > 0 {
+			s.log.Info("ticket create: some watcher emails did not resolve", "ticket_id", t.ID, "unresolved", unresolved)
+		}
 	}
 	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- t.ID is our own DB-generated int64, not user input
 	http.Redirect(w, r, "/tickets/"+strconv.FormatInt(t.ID, 10), http.StatusSeeOther)

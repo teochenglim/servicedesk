@@ -227,6 +227,25 @@ type CustomFieldDef struct {
 	Required bool   `gorm:"not null;default:false" json:"required"`
 }
 
+// Category is the ticket-submission category catalog (RELEASE/v_3.0.5.md) -
+// self-referencing ParentID (same pattern as Organization/Queue/Service) so
+// today's flat top-level list can grow to the requested 3-layer nesting
+// later without a schema change; only ParentID == nil rows are shown/
+// selectable at ticket submission this cycle. TitleTemplate/DescriptionTemplate
+// prefill the submission form's Title input / Description editor when a
+// Customer picks this category - empty means no prefill, and either template
+// is always freely editable afterward, never enforced. Ticket.Category stays
+// a plain string (matching how CustomFieldDef.Category already loosely
+// matches it) - this catalog only backs the dropdown + template lookup, it's
+// not a foreign key on Ticket.
+type Category struct {
+	ID                  int64  `gorm:"primaryKey" json:"id"`
+	Name                string `gorm:"not null;size:190;uniqueIndex" json:"name"`
+	ParentID            *int64 `json:"parent_id"`
+	TitleTemplate       string `gorm:"not null;default:''" json:"title_template"`
+	DescriptionTemplate string `gorm:"not null;default:''" json:"description_template"`
+}
+
 type Tag struct {
 	ID   int64  `gorm:"primaryKey" json:"id"`
 	Name string `gorm:"not null;size:190;uniqueIndex:uq_tag" json:"name"`

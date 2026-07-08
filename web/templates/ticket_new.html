@@ -4,6 +4,16 @@
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 <div class="card">
 <form class="stacked" method="post" action="/tickets">
+  <label for="category">Category</label>
+  <select id="category" name="category" required data-category-templates
+          hx-get="/custom-fields/for-category" hx-trigger="change" hx-include="this" hx-target="#custom-fields">
+    <option value="" disabled selected>Choose a category&hellip;</option>
+    {{range .Categories}}
+    <option value="{{.Name}}" data-title="{{.TitleTemplate}}" data-description="{{.DescriptionTemplate}}">{{.Name}}</option>
+    {{end}}
+  </select>
+  <div id="custom-fields"></div>
+
   <label for="title">Title</label>
   <input id="title" type="text" name="title" required>
 
@@ -15,10 +25,12 @@
   <button type="button" class="link-btn" data-kb-match-url="/tickets/match-symptom" data-kb-match-target="kb-match-result">&#128269; Check for existing solution</button>
   <div id="kb-match-result"></div>
 
+  {{if not (eq .User.Role "Customer")}}
   <label for="queue_id">Queue</label>
   <select id="queue_id" name="queue_id" required>
     {{range .Queues}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
+  {{end}}
 
   <label for="priority">Priority (blank = queue default)</label>
   <select id="priority" name="priority">
@@ -26,16 +38,14 @@
     <option>P1</option><option>P2</option><option>P3</option><option>P4</option>
   </select>
 
-  <label for="category">Category</label>
-  <input id="category" type="text" name="category" placeholder="e.g. database, network"
-         hx-get="/custom-fields/for-category" hx-trigger="change" hx-include="this" hx-target="#custom-fields">
-  <div id="custom-fields"></div>
-
   <label for="service_id">Impacted service (optional)</label>
   <select id="service_id" name="service_id">
     <option value="">Unknown</option>
     {{range .Services}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
+
+  <label for="watcher_emails">Notify other people about this ticket (optional)</label>
+  <input id="watcher_emails" type="text" name="watcher_emails" placeholder="teammate@example.com, another@example.com">
 
   <div class="actions"><button class="primary" type="submit">Create ticket</button></div>
 </form>

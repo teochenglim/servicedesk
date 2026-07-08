@@ -116,6 +116,7 @@ Redesign decisions:
 - Submitting a ticket, or adding a note, also supports file attachments (§8.7) — screenshots, logs, documents. Attachments show as thumbnails inline, associated with the ticket, and are visible to Engineer/Manager/ServiceDeskAdmin too.
 - Internal notes are never shown here, obviously — the Customer view only ever renders external notes and external attachments.
 - No tagging, no queue names, no engineer names unless the org wants that transparency — Customers shouldn't need to know your internal routing to trust the process.
+- The submission form (RELEASE/v_3.0.5.md) doesn't ask a Customer to pick a Queue at all — every new ticket lands in the guaranteed default queue, and staff Transfer it afterward if it's routed wrong, same mechanism as any other misrouted ticket. (Engineer/Manager/SystemAdmin still see and can pick a Queue on this same form when raising a ticket on behalf of someone, §8.5.) Category is a dropdown against the Category catalog (below), not free text — picking one prefills Title/Description with that category's template, fully editable afterward, never enforced. A Customer can also optionally name a few other people (by email) to watch the new ticket alongside them, same mechanism as the ticket-detail page's watcher field (RELEASE/v_3.0.4.md).
 
 ## 8.5 Persona 3 — Engineer
 
@@ -334,6 +335,14 @@ A KB article's "which service is this about, and is it critical" needs a real en
 A ticket's impacted service (`Ticket.ServiceID`) is optional and settable at both submission and triage — "unknown" is a normal, common state, never required. A KB article can name 0+ impacted services (`KBArticleService`, many-to-many — one incident can span multiple services); the article never duplicates a service's criticality as its own field, it's read live off the linked `Service` so it can't drift from the catalog.
 
 CRUD for the Service catalog itself is SystemAdmin-only (`/admin/services`) — a system-configuration concern like Users/Webhooks/Workflows, not a day-to-day queue/SLA concern like Queue/CustomFieldDef (which Manager owns via `CapQueueOps`).
+
+## 8.10b Shared component: Category catalog
+
+`Ticket.Category` was a free-text field with no structure behind it (a Customer typed anything, `CustomFieldDef.Category` matched it loosely by string). RELEASE/v_3.0.5.md replaced the submission form's free-text input with a real catalog (`Category`) — same self-referencing-`Parent` pattern as `Organization`/`Queue`/`Service`, so it's schema-ready for the requested 3-layer nesting (e.g. Hardware → Laptop → Screen), but only top-level (`ParentID == nil`) categories are shown/selectable at submission this cycle. `Ticket.Category` itself stays a plain string, same as before — the catalog only backs the dropdown and the title/description templates, it's not a foreign key.
+
+Each `Category` optionally carries a `TitleTemplate`/`DescriptionTemplate` — static text that prefills the submission form's Title input and Description editor the moment a Customer picks that category, always freely editable afterward, never enforced. An empty template just means no prefill for that category.
+
+CRUD is SystemAdmin-only (`/admin/categories`), same reasoning as the Service catalog above.
 
 ## 8.11 Cross-cutting UI rules
 

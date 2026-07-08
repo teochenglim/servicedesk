@@ -51,6 +51,7 @@ type Server struct {
 	queueSvc      *service.QueueService
 	sudoSvc       *service.SudoService
 	serviceSvc    *service.ServiceCatalogService
+	categorySvc   *service.CategoryService
 	kbSvc         *service.KBService
 	aiSummarySvc  *service.AISummaryService // nil unless aiEnabled
 	aiDraftSvc    *service.AIDraftService   // nil unless aiEnabled
@@ -71,7 +72,7 @@ func NewServer(
 	approvals *repo.ApprovalRepo, customFields *repo.CustomFieldRepo, events *repo.EventLogRepo, tickets *repo.TicketRepo,
 	ticketSvc *service.TicketService, noteSvc *service.NoteService, problemSvc *service.ProblemService,
 	attachmentSvc *service.AttachmentService, queueSvc *service.QueueService, sudoSvc *service.SudoService,
-	serviceSvc *service.ServiceCatalogService, kbSvc *service.KBService,
+	serviceSvc *service.ServiceCatalogService, categorySvc *service.CategoryService, kbSvc *service.KBService,
 	aiSummarySvc *service.AISummaryService, aiDraftSvc *service.AIDraftService, aiEnabled bool,
 	engine *workflow.Engine, hub *sse.Hub,
 ) *Server {
@@ -82,7 +83,7 @@ func NewServer(
 		webhooks: webhooks, workflows: workflows, workflowTask: workflowTask,
 		approvals: approvals, customFields: customFields, events: events, tickets: tickets,
 		ticketSvc: ticketSvc, noteSvc: noteSvc, problemSvc: problemSvc, attachmentSvc: attachmentSvc,
-		queueSvc: queueSvc, sudoSvc: sudoSvc, serviceSvc: serviceSvc, kbSvc: kbSvc,
+		queueSvc: queueSvc, sudoSvc: sudoSvc, serviceSvc: serviceSvc, categorySvc: categorySvc, kbSvc: kbSvc,
 		aiSummarySvc: aiSummarySvc, aiDraftSvc: aiDraftSvc, aiEnabled: aiEnabled,
 		engine: engine, hub: hub,
 	}
@@ -222,6 +223,12 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /admin/services", adminOnly(s.handleServiceCreate))
 	mux.Handle("POST /admin/services/{id}", adminOnly(s.handleServiceUpdate))
 	mux.Handle("POST /admin/services/{id}/delete", adminOnly(s.handleServiceDelete))
+	// Category catalog (RELEASE/v_3.0.5.md) - SystemAdmin-only, same reasoning
+	// as the Service catalog/Custom Fields above.
+	mux.Handle("GET /admin/categories", adminOnly(s.handleCategoriesList))
+	mux.Handle("POST /admin/categories", adminOnly(s.handleCategoryCreate))
+	mux.Handle("POST /admin/categories/{id}", adminOnly(s.handleCategoryUpdate))
+	mux.Handle("POST /admin/categories/{id}/delete", adminOnly(s.handleCategoryDelete))
 	// Sudo-as (DESIGN/02 §2.5): Start requires CapSudo (SystemAdmin only,
 	// checked again inside SudoService.Start per ARCHITECTURE.md's
 	// defense-in-depth rule). Stop is intentionally just `protect` - while a
