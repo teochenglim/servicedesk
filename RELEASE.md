@@ -7,6 +7,7 @@ Newest first.
 | Version | Theme | Status |
 | :--- | :--- | :--- |
 | [v3.1.0](RELEASE/v_3.1.0.md) | Larger initiatives (needs design pass) | Not started |
+| [v3.0.8](RELEASE/v_3.0.8.md) | Favicon | Built — see file for exact scope |
 | [v3.0.7](RELEASE/v_3.0.7.md) | Live ticket updates were completely dead (SSE middleware `http.Flusher` gap) | Built — see file for exact scope |
 | [v3.0.6](RELEASE/v_3.0.6.md) | Markdown editor was never actually mounting (wrong vendored Toast UI Editor build) | Built — see file for exact scope |
 | [v3.0.5](RELEASE/v_3.0.5.md) | Ticket submission form: Category catalog + templates, drop Queue field for Customer, watchers at creation | Built — see file for exact scope |
