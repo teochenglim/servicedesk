@@ -333,6 +333,7 @@ func sparklineSVG(values []float64, accent string) template.HTML {
 	last := points[len(points)-1]
 	lastXY := strings.SplitN(last, ",", 2)
 
+	// nosemgrep: go.lang.security.audit.net.formatted-template-string.formatted-template-string -- every arg is a constant or a computed float (w, h, len(values), points, accent are all internal), no user input reaches this template
 	svg := fmt.Sprintf(
 		`<svg width="%.0f" height="%.0f" viewBox="0 0 %.0f %.0f" role="img" aria-label="trend, last %d days"><title>Last %d days</title>`+
 			`<polyline points="%s" fill="none" stroke="var(--tw-border)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`+
