@@ -69,7 +69,7 @@ release        Bump, commit, tag, push - triggers GitHub Actions (VERSION=x.y.z 
 - **`.github/workflows/security.yml`** — Semgrep (SAST: Go, SQL injection, secrets, OWASP Top 10) + Trivy (Go module CVEs + built container image), on every push/PR to `main` and weekly. Fails on CRITICAL/HIGH findings; also uploads SARIF to the repo's Security tab.
 - **`.github/workflows/release.yml`** — triggered by a `v*` tag push (i.e. `make release VERSION=x.y.z`): gates on tests, builds a cross-platform binary matrix (linux/darwin/windows × amd64/arm64), and creates a GitHub Release with the archives attached.
 
-Do not run `make release`, `make tag`, or any git push/commit/tag command yourself unless the user explicitly asks — releasing is the user's call.
+Do not run `make release` or any git push/commit/tag command yourself unless the user explicitly asks — releasing is the user's call.
 
 ## Conventions worth knowing before you're surprised by them
 
